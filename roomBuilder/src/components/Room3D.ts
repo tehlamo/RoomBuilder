@@ -49,6 +49,7 @@ export class RoomDimensionsInput {
       </div>
     `;
     this.setupEventListeners(container);
+    return container;
   }
 
   private setupEventListeners(container: HTMLDivElement): void {
@@ -96,7 +97,7 @@ export class RoomDimensionsInput {
     const createBtn = document.getElementById('create-room') as HTMLButtonElement;
     const width = (document.getElementById('width') as HTMLInputElement).value;
     const length = (document.getElementById('length') as HTMLInputElement).value;
-    const height = (document.getElementById('height') as HTMLInputELement).value;
+    const height = (document.getElementById('height') as HTMLInputElement).value;
     
     createBtn.disabled = !(width && length && height);
   }
