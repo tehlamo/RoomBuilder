@@ -1,16 +1,12 @@
-import { RoomDimensions } from './types/Room';
-import { Furniture } from './types/Furniture';
-import { AppState } from './types/App';
-import { RoomDimensionsInput } from './components/RoomDimensions';
-import { Room3D } from './components/Room3D';
-import { FurnitureManager } from './components/FurnitureManager';
-import { DecorationAI } from './services/DecorationAI';
+import type {RoomDimensions} from './types/Room';
+import type {Furniture} from './types/Furniture';
+import type {AppState} from './types/App';
+import {Room3D} from './components/Room3D';
+import {FurnitureManager} from './components/FurnitureManager';
 
 export class RoomBuilderApp {
-  private room3D: Room3D;
-  private furnitureManager: FurnitureManager;
-  private decorationAI: DecorationAI;
-  private roomDimensionsInput: RoomDimensionsInput;
+  private room3D!: Room3D;
+  private furnitureManager!: FurnitureManager;
   private state: AppState;
   private container: HTMLElement;
 
@@ -31,10 +27,6 @@ export class RoomBuilderApp {
 
   private initializeServices(): void {
     this.furnitureManager = new FurnitureManager();
-    this.decorationAI = new DecorationAI();
-    this.roomDimensionsInput = new RoomDimensionsInput((dimensions) => {
-      this.handleRoomCreated(dimensions);
-    });
   }
 
   private initializeUI(): void {
@@ -49,7 +41,6 @@ export class RoomBuilderApp {
         <div class="main-content">
           <div id="3d-viewport"></div>
           <div class="controls">
-            <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
             <button id="save-design" class="btn-primary">Save Design</button>
           </div>
         </div>
@@ -64,7 +55,28 @@ export class RoomBuilderApp {
 
   private setupRoomInput(): void {
     const roomSetup = document.getElementById('room-setup')!;
-    roomSetup.appendChild(this.roomDimensionsInput.createInputForm());
+    roomSetup.innerHTML = `
+      <div class="form-section">
+        <h3>Room Dimensions</h3>
+        <div class="input-group">
+          <label for="width">Width (ft):</label>
+          <input type="number" id="width" min="1" max="50" step="0.1" placeholder="12">
+        </div>
+        <div class="input-group">
+          <label for="length">Length (ft):</label>
+          <input type="number" id="length" min="1" max="50" step="0.1" placeholder="15">
+        </div>
+        <div class="input-group">
+          <label for="height">Height (ft):</label>
+          <input type="number" id="height" min="6" max="20" step="0.1" placeholder="9">
+        </div>
+        <button id="create-room" class="btn-primary">Create Room</button>
+      </div>
+    `;
+    
+    document.getElementById('create-room')?.addEventListener('click', () => {
+      this.handleCreateRoom();
+    });
   }
 
   private setupFurniturePalette(): void {
@@ -160,16 +172,22 @@ export class RoomBuilderApp {
   }
 
   private setupEventListeners(): void {
-    document.getElementById('get-suggestions')?.addEventListener('click', () => {
-      this.getAISuggestions();
-    });
-
     document.getElementById('save-design')?.addEventListener('click', () => {
       this.saveDesign();
     });
   }
 
-  private handleRoomCreated(dimensions: RoomDimensions): void {
+  private handleCreateRoom(): void {
+    const width = parseFloat((document.getElementById('width') as HTMLInputElement).value);
+    const length = parseFloat((document.getElementById('length') as HTMLInputElement).value);
+    const height = parseFloat((document.getElementById('height') as HTMLInputElement).value);
+
+    if (!width || !length || !height) {
+      alert('Please enter all dimensions');
+      return;
+    }
+
+    const dimensions: RoomDimensions = { width, length, height };
     this.state.roomDimensions = dimensions;
     
     // Initialize 3D viewport
@@ -220,50 +238,6 @@ export class RoomBuilderApp {
     }
   }
 
-  private async getAISuggestions(): Promise<void> {
-    if (!this.state.roomDimensions) {
-      alert('Please create a room first');
-      return;
-    }
-
-    try {
-      const suggestions = await this.decorationAI.getDecorationSuggestions(
-        this.state.roomDimensions,
-        this.state.furniture,
-        this.state.roomType,
-        this.state.budget
-      );
-
-      this.displaySuggestions(suggestions);
-    } catch (error) {
-      console.error('Error getting AI suggestions:', error);
-      alert('Error getting AI suggestions. Please check your API key.');
-    }
-  }
-
-  private displaySuggestions(suggestions: any[]): void {
-    const suggestionsDiv = document.getElementById('suggestions')!;
-    suggestionsDiv.innerHTML = `
-      <div class="suggestions-section">
-        <h3>AI Suggestions</h3>
-        <div class="suggestions-list">
-          ${suggestions.map(suggestion => `
-            <div class="suggestion-item">
-              <div class="suggestion-header">
-                <span class="suggestion-name">${suggestion.item}</span>
-                <span class="suggestion-cost">$${suggestion.estimatedCost}</span>
-              </div>
-              <p class="suggestion-description">${suggestion.description}</p>
-              <div class="suggestion-meta">
-                <span class="suggestion-category">${suggestion.category}</span>
-                <span class="suggestion-priority priority-${suggestion.priority}">${suggestion.priority}</span>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }
 
   private saveDesign(): void {
     const design = {

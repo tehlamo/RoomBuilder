@@ -1,108 +1,140 @@
-import type {RoomDimensions} from '../types/Room';
+import * as THREE from 'three';
+import type { RoomDimensions } from '../types/Room';
+import type { Furniture } from '../types/Furniture';
 
-export class RoomDimensionsInput {
-  private dimensions: RoomDimensions = {
-    width: 0, 
-    length: 0, 
-    height: 0
-  };
-  private onDimensionsChange?: (dimensions: RoomDimensions) => void;
+export class Room3D {
+  private scene!: THREE.Scene;
+  private camera!: THREE.PerspectiveCamera;
+  private renderer!: THREE.WebGLRenderer;
+  private roomMesh!: THREE.Mesh;
+  private furnitureMeshes: Map<string, THREE.Mesh> = new Map();
+  private controls: any;
+  private container: HTMLElement;
 
-  constructor(onDimensionsChange?: (dimensions: RoomDimensions) => void) {
-    this.onDimensionsChange = onDimensionsChange;
+  constructor(container: HTMLElement) {
+    this.container = container;
+    this.initializeScene();
+    this.setupLighting();
+    this.setupControls();
+    this.animate();
   }
 
-  createInputForm(): HTMLDivElement {
-    const container = document.createElement('div');
-    container.className = 'room-dimensions-form';
+  private initializeScene(): void {
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0xf0f0f0);
 
-    container.innerHTML = `
-      <div class = "form-section">
-        <h3>Room Dimensions</h3>
-        <div class = "input-group">
-          <label for = "width">Width (ft):</label>
-          <input type = "number" id = "width" min = "1" max = "50" step = "0.1" placeholder = "12">
-        </div>
-        <div class = "input-group">
-          <label for = "length">Length (ft):</label>
-          <input type = "number" id = "length" min = "1" max = "50" step = "0.1" placeholder = "12">
-        </div>
-        <div class = "input-group">
-          <label for = "height">Height (ft):</label>
-          <input type = "number" id = "height" min = "6" max = "20" step = "0.1" placeholder = "9">
-        </div>
-        <div class - "input-group">
-          <label for = "room-type">Room Type:</label>
-          <select id = "room-type">
-            <option value = "living">Living Room</option>
-            <option value = "bedroom">Bedroom</option>
-            <option value = "bathroom">Bathroom</option>
-            <option value = "hallway>Hallway</option>
-            <option value = "kitchen">Kitchen</option>
-            <option value = "office">Office</option>
-            <option value = "guest">Guest</option>
-            <option value = "dining">Dining</option>
-            <option value = "other">Other</option>
-          </select>
-        </div>
-        <button id = "create-room" class - "btn-primary">
-      </div>
-    `;
-    this.setupEventListeners(container);
-    return container;
-  }
+    this.camera = new THREE.PerspectiveCamera(75, this.container.clientWidth / this.container.clientHeight, 0.1, 1000);
+    this.camera.position.set(10, 10, 10);
+    this.camera.lookAt(0, 0, 0);
 
-  private setupEventListeners(container: HTMLDivElement): void {
-    const createRoomBtn = container.querySelector('#create-room') as HTMLButtonElement;
-    createRoomBtn.addEventListener('click', () => {
-      this.handleCreateRoom();
-    });
-
-    const inputs = container.querySelectorAll('input[type = "number"]');
-    inputs.forEach(input => {
-      input.addEventListener('input', () => {
-        this.validateInputs();
-      });
-    });
-  }
-
-  private handleCreateRoom(): void {
-    const width = parseFloat((document.getElementById('width') as HTMLInputElement).value);
-    const length = parseFloat((document.getElementById('length') as HTMLInputElement).value);
-    const height = parseFloat((document.getElementById('height') as HTMLInputElement).value);
-
-    if (this.validateDimensions(width, length, height)) {
-      this.dimensions = {
-        width,
-        length,
-        height
-      };
-      this.onDimensionsChange?.(this.dimensions);
-    }
-  }
-
-  private validateDimensions(width: number, length: number, height: number): boolean {
-    if (width <= 0 || length <= 0 || height <= 0) {
-      alert('All dimensions must be greater than 0');
-      return false;
-    }
-    if (width > 50 || length > 50 || height > 20) {
-      alert('Dimensions are too large. Maximum: 50ft x 50ft x 20ft');
-      return false;
-    }
-    return true;
-  }
-
-  private validateInputs(): void {
-    const createBtn = document.getElementById('create-room') as HTMLButtonElement;
-    const width = (document.getElementById('width') as HTMLInputElement).value;
-    const length = (document.getElementById('length') as HTMLInputElement).value;
-    const height = (document.getElementById('height') as HTMLInputElement).value;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     
-    createBtn.disabled = !(width && length && height);
+    this.container.appendChild(this.renderer.domElement);
+
+    window.addEventListener('resize', () => this.onWindowResize());
   }
 
-  getDimensions(): RoomDimensions {
-    return this.dimensions;
+  createRoom(dimensions: RoomDimensions): void {
+    if (this.roomMesh) {
+      this.scene.remove(this.roomMesh);
+    }
+
+    const roomGeometry = new THREE.BoxGeometry(dimensions.width, dimensions.height, dimensions.length);
+    const roomMaterial = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.1,
+      wireframe: true
+    });
+
+    this.roomMesh = new THREE.Mesh(roomGeometry, roomMaterial);
+    this.scene.add(this.roomMesh);
+
+    const floorGeometry = new THREE.PlaneGeometry(dimensions.width, dimensions.length);
+    const floorMaterial = new THREE.MeshLambertMaterial({
+      color: 0x8b4513,
+      transparent: true,
+      opacity: 0.8
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -dimensions.height / 2;
+    floor.receiveShadow = true;
+    this.scene.add(floor);
+
+    const ceiling = new THREE.Mesh(floorGeometry, floorMaterial);
+    ceiling.rotation.x = Math.PI / 2;
+    ceiling.position.y = dimensions.height / 2;
+    this.scene.add(ceiling);
+
+    const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
+    this.camera.position.set(maxDimension * 1.5, maxDimension * 0.8, maxDimension * 1.5);
+    this.camera.lookAt(0, 0, 0);
+  }
+
+  addFurniture(furniture: Furniture): void {
+    const geometry = new THREE.BoxGeometry(furniture.width, furniture.height, furniture.depth);
+    const material = new THREE.MeshLambertMaterial({ color: furniture.color });
+    const mesh = new THREE.Mesh(geometry, material);
+
+    mesh.position.set(furniture.x, furniture.y, furniture.z);
+    mesh.rotation.y = (furniture.rotation * Math.PI) / 180;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    this.addFurnitureLabel(mesh, furniture.name);
+    this.scene.add(mesh);
+    this.furnitureMeshes.set(furniture.id, mesh);
+  }
+
+  removeFurniture(furnitureId: string): void {
+    const mesh = this.furnitureMeshes.get(furnitureId);
+    if (mesh) {
+      this.scene.remove(mesh);
+      this.furnitureMeshes.delete(furnitureId);
+    }
+  }
+
+  private addFurnitureLabel(mesh: THREE.Mesh, name: string): void {
+    // Placeholder for furniture labels
+  }
+
+  private setupLighting(): void {
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    this.scene.add(ambientLight);
+
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    directionalLight.position.set(10, 10, 5);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    this.scene.add(directionalLight);
+
+    const pointLight = new THREE.PointLight(0xffffff, 0.5, 100);
+    pointLight.position.set(0, 5, 0);
+    this.scene.add(pointLight);
+  }
+
+  private setupControls(): void {
+    // Placeholder for orbit controls
+  }
+
+  private animate(): void {
+    requestAnimationFrame(() => this.animate());
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private onWindowResize(): void {
+    this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+  }
+
+  render(): void {
+    this.renderer.render(this.scene, this.camera);
   }
 }
