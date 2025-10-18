@@ -47,6 +47,10 @@ export class RoomBuilderApp {
             <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
             <button id="save-design" class="btn-primary">Save Design</button>
           </div>
+          <div class="instructions">
+            <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
+            <p><strong>Furniture:</strong> Click items in the sidebar to add them to your room</p>
+          </div>
         </div>
       </div>
     `;
@@ -115,7 +119,6 @@ export class RoomBuilderApp {
   }
 
   private setupFurnitureEventListeners(): void {
-    // Category filtering
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const category = (e.target as HTMLElement).dataset.category!;
@@ -167,7 +170,6 @@ export class RoomBuilderApp {
       </div>
     `;
 
-    // Budget input handler
     const budgetInput = document.getElementById('budget') as HTMLInputElement;
     budgetInput.addEventListener('input', () => {
       this.state.budget = parseFloat(budgetInput.value) || 0;
@@ -190,22 +192,43 @@ export class RoomBuilderApp {
     const length = parseFloat((document.getElementById('length') as HTMLInputElement).value);
     const height = parseFloat((document.getElementById('height') as HTMLInputElement).value);
 
+    console.log('Creating room with dimensions:', { width, length, height });
+
     if (!width || !length || !height) {
       alert('Please enter all dimensions');
+      return;
+    }
+
+    if (width <= 0 || length <= 0 || height <= 0) {
+      alert('All dimensions must be greater than 0');
       return;
     }
 
     const dimensions: RoomDimensions = { width, length, height };
     this.state.roomDimensions = dimensions;
     
-    // Initialize 3D viewport
-    const viewport = document.getElementById('3d-viewport')!;
-    this.room3D = new Room3D(viewport);
-    this.room3D.createRoom(dimensions);
-    
-    // Update UI
-    document.getElementById('room-setup')!.style.display = 'none';
-    document.getElementById('furniture-palette')!.style.display = 'block';
+    try {
+      // Initialize 3D viewport
+      const viewport = document.getElementById('3d-viewport')!;
+      if (!viewport) {
+        throw new Error('3D viewport element not found');
+      }
+      
+      this.room3D = new Room3D(viewport);
+      this.room3D.createRoom(dimensions);
+      
+      // Update UI
+      const roomSetup = document.getElementById('room-setup');
+      const furniturePalette = document.getElementById('furniture-palette');
+      
+      if (roomSetup) roomSetup.style.display = 'none';
+      if (furniturePalette) furniturePalette.style.display = 'block';
+      
+      console.log('Room created successfully!');
+    } catch (error) {
+      console.error('Error creating room:', error);
+      alert('Error creating room. Please check the console for details.');
+    }
   }
 
   private addFurnitureToRoom(template: any): void {
@@ -214,11 +237,10 @@ export class RoomBuilderApp {
       return;
     }
 
-    // Simple placement logic - you can make this more sophisticated
     const position = {
-      x: Math.random() * (this.state.roomDimensions.width - template.dimensions.width),
+      x: (this.state.roomDimensions.width - template.dimensions.width) / 2,
       y: 0,
-      z: Math.random() * (this.state.roomDimensions.length - template.dimensions.depth),
+      z: (this.state.roomDimensions.length - template.dimensions.depth) / 2,
       rotation: 0
     };
 
@@ -226,6 +248,8 @@ export class RoomBuilderApp {
     this.room3D.addFurniture(furniture);
     this.state.furniture.push(furniture);
     this.updateBudgetDisplay();
+    
+    console.log(`Added ${furniture.name} to room at position (${furniture.x}, ${furniture.y}, ${furniture.z})`);
   }
 
   private updateBudgetDisplay(): void {
@@ -235,7 +259,6 @@ export class RoomBuilderApp {
     document.getElementById('furniture-cost')!.textContent = `$${furnitureCost}`;
     document.getElementById('remaining-budget')!.textContent = `$${remaining}`;
     
-    // Color code the remaining budget
     const remainingElement = document.getElementById('remaining-budget')!;
     if (remaining < 0) {
       remainingElement.style.color = 'red';

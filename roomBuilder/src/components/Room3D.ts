@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { RoomDimensions } from '../types/Room';
 import type { Furniture } from '../types/Furniture';
 
@@ -8,7 +9,7 @@ export class Room3D {
   private renderer!: THREE.WebGLRenderer;
   private roomMesh!: THREE.Mesh;
   private furnitureMeshes: Map<string, THREE.Mesh> = new Map();
-  private controls: any;
+  private controls!: OrbitControls;
   private container: HTMLElement;
 
   constructor(container: HTMLElement) {
@@ -23,12 +24,15 @@ export class Room3D {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xf0f0f0);
 
-    this.camera = new THREE.PerspectiveCamera(75, this.container.clientWidth / this.container.clientHeight, 0.1, 1000);
+    const width = this.container.clientWidth || 800;
+    const height = this.container.clientHeight || 600;
+
+    this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     this.camera.position.set(10, 10, 10);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.renderer.setSize(width, height);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -36,44 +40,60 @@ export class Room3D {
     this.container.appendChild(this.renderer.domElement);
 
     window.addEventListener('resize', () => this.onWindowResize());
+    
+    console.log(`Renderer initialized with size: ${width}x${height}`);
   }
 
   createRoom(dimensions: RoomDimensions): void {
-    if (this.roomMesh) {
-      this.scene.remove(this.roomMesh);
+    console.log('Creating room with dimensions:', dimensions);
+    
+    try {
+      if (this.roomMesh) {
+        this.scene.remove(this.roomMesh);
+      }
+
+      const roomGeometry = new THREE.BoxGeometry(dimensions.width, dimensions.height, dimensions.length);
+      const roomMaterial = new THREE.MeshLambertMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.1,
+        wireframe: true
+      });
+
+      this.roomMesh = new THREE.Mesh(roomGeometry, roomMaterial);
+      this.scene.add(this.roomMesh);
+      console.log('Room mesh created and added to scene');
+
+      const floorGeometry = new THREE.PlaneGeometry(dimensions.width, dimensions.length);
+      const floorMaterial = new THREE.MeshLambertMaterial({
+        color: 0x8b4513,
+        transparent: true,
+        opacity: 0.8
+      });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = -dimensions.height / 2;
+      floor.receiveShadow = true;
+      this.scene.add(floor);
+
+      const ceiling = new THREE.Mesh(floorGeometry, floorMaterial);
+      ceiling.rotation.x = Math.PI / 2;
+      ceiling.position.y = dimensions.height / 2;
+      this.scene.add(ceiling);
+
+      const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
+      this.camera.position.set(maxDimension * 1.5, maxDimension * 0.8, maxDimension * 1.5);
+      this.camera.lookAt(0, 0, 0);
+      
+      setTimeout(() => {
+        this.onWindowResize();
+      }, 100);
+      
+      console.log('Room created successfully!');
+    } catch (error) {
+      console.error('Error creating room:', error);
+      throw error;
     }
-
-    const roomGeometry = new THREE.BoxGeometry(dimensions.width, dimensions.height, dimensions.length);
-    const roomMaterial = new THREE.MeshLambertMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.1,
-      wireframe: true
-    });
-
-    this.roomMesh = new THREE.Mesh(roomGeometry, roomMaterial);
-    this.scene.add(this.roomMesh);
-
-    const floorGeometry = new THREE.PlaneGeometry(dimensions.width, dimensions.length);
-    const floorMaterial = new THREE.MeshLambertMaterial({
-      color: 0x8b4513,
-      transparent: true,
-      opacity: 0.8
-    });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -dimensions.height / 2;
-    floor.receiveShadow = true;
-    this.scene.add(floor);
-
-    const ceiling = new THREE.Mesh(floorGeometry, floorMaterial);
-    ceiling.rotation.x = Math.PI / 2;
-    ceiling.position.y = dimensions.height / 2;
-    this.scene.add(ceiling);
-
-    const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
-    this.camera.position.set(maxDimension * 1.5, maxDimension * 0.8, maxDimension * 1.5);
-    this.camera.lookAt(0, 0, 0);
   }
 
   addFurniture(furniture: Furniture): void {
@@ -86,9 +106,15 @@ export class Room3D {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     
+    // Make furniture interactive
+    mesh.userData = { furnitureId: furniture.id, furniture: furniture };
+    mesh.name = furniture.name;
+    
     this.addFurnitureLabel(mesh, furniture.name);
     this.scene.add(mesh);
     this.furnitureMeshes.set(furniture.id, mesh);
+    
+    console.log(`Furniture mesh created for ${furniture.name} at (${furniture.x}, ${furniture.y}, ${furniture.z})`);
   }
 
   removeFurniture(furnitureId: string): void {
@@ -120,21 +146,75 @@ export class Room3D {
   }
 
   private setupControls(): void {
-    // Placeholder for orbit controls
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.05;
+    this.controls.enableZoom = true;
+    this.controls.enablePan = true;
+    this.controls.enableRotate = true;
+    this.controls.minDistance = 5;
+    this.controls.maxDistance = 100;
   }
 
   private animate(): void {
     requestAnimationFrame(() => this.animate());
+    
+    // Update controls
+    if (this.controls) {
+      this.controls.update();
+    }
+    
     this.renderer.render(this.scene, this.camera);
   }
 
   private onWindowResize(): void {
-    this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+    const width = this.container.clientWidth || 800;
+    const height = this.container.clientHeight || 600;
+    
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+    this.renderer.setSize(width, height);
+    
+    console.log(`Window resized to: ${width}x${height}`);
   }
 
   render(): void {
     this.renderer.render(this.scene, this.camera);
+  }
+
+  getFurnitureAtPosition(x: number, y: number): Furniture | null {
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    
+    // Convert screen coordinates to normalized device coordinates
+    mouse.x = (x / this.container.clientWidth) * 2 - 1;
+    mouse.y = -(y / this.container.clientHeight) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, this.camera);
+    
+    // Get all furniture meshes
+    const furnitureMeshes = Array.from(this.furnitureMeshes.values());
+    const intersects = raycaster.intersectObjects(furnitureMeshes);
+    
+    if (intersects.length > 0) {
+      const furniture = intersects[0].object.userData.furniture;
+      return furniture;
+    }
+    
+    return null;
+  }
+
+  highlightFurniture(furnitureId: string, highlight: boolean): void {
+    const mesh = this.furnitureMeshes.get(furnitureId);
+    if (mesh) {
+      const material = mesh.material as THREE.MeshLambertMaterial;
+      if (highlight) {
+        material.emissive.setHex(0x444444); // Add glow effect
+        material.opacity = 0.8;
+      } else {
+        material.emissive.setHex(0x000000); // Remove glow
+        material.opacity = 1.0;
+      }
+    }
   }
 }
