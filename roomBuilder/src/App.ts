@@ -3,10 +3,12 @@ import type {Furniture} from './types/Furniture';
 import type {AppState} from './types/App';
 import {Room3D} from './components/Room3D';
 import {FurnitureManager} from './components/FurnitureManager';
+import {DecorationAI} from './services/DecorationAI';
 
 export class RoomBuilderApp {
   private room3D!: Room3D;
   private furnitureManager!: FurnitureManager;
+  private decorationAI!: DecorationAI;
   private state: AppState;
   private container: HTMLElement;
 
@@ -27,6 +29,7 @@ export class RoomBuilderApp {
 
   private initializeServices(): void {
     this.furnitureManager = new FurnitureManager();
+    this.decorationAI = new DecorationAI();
   }
 
   private initializeUI(): void {
@@ -41,6 +44,7 @@ export class RoomBuilderApp {
         <div class="main-content">
           <div id="3d-viewport"></div>
           <div class="controls">
+            <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
             <button id="save-design" class="btn-primary">Save Design</button>
           </div>
         </div>
@@ -172,6 +176,10 @@ export class RoomBuilderApp {
   }
 
   private setupEventListeners(): void {
+    document.getElementById('get-suggestions')?.addEventListener('click', () => {
+      this.getAISuggestions();
+    });
+
     document.getElementById('save-design')?.addEventListener('click', () => {
       this.saveDesign();
     });
@@ -238,6 +246,50 @@ export class RoomBuilderApp {
     }
   }
 
+  private async getAISuggestions(): Promise<void> {
+    if (!this.state.roomDimensions) {
+      alert('Please create a room first');
+      return;
+    }
+
+    try {
+      const suggestions = await this.decorationAI.getDecorationSuggestions(
+        this.state.roomDimensions,
+        this.state.furniture,
+        this.state.roomType,
+        this.state.budget
+      );
+
+      this.displaySuggestions(suggestions);
+    } catch (error) {
+      console.error('Error getting AI suggestions:', error);
+      alert('Error getting AI suggestions.');
+    }
+  }
+
+  private displaySuggestions(suggestions: any[]): void {
+    const suggestionsDiv = document.getElementById('suggestions')!;
+    suggestionsDiv.innerHTML = `
+      <div class="suggestions-section">
+        <h3>AI Suggestions</h3>
+        <div class="suggestions-list">
+          ${suggestions.map(suggestion => `
+            <div class="suggestion-item">
+              <div class="suggestion-header">
+                <span class="suggestion-name">${suggestion.item}</span>
+                <span class="suggestion-cost">$${suggestion.estimatedCost}</span>
+              </div>
+              <p class="suggestion-description">${suggestion.description}</p>
+              <div class="suggestion-meta">
+                <span class="suggestion-category">${suggestion.category}</span>
+                <span class="suggestion-priority priority-${suggestion.priority}">${suggestion.priority}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
 
   private saveDesign(): void {
     const design = {

@@ -15,6 +15,5 @@ export interface DecorationSuggestion {
   priority: 'high' | 'medium' | 'low';
 }
 
-// Import the types we need
 import type {RoomDimensions} from './Room';
 import type {Furniture} from './Furniture';
