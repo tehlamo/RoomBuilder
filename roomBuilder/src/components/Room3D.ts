@@ -24,8 +24,9 @@ export class Room3D {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xf0f0f0);
 
-    const width = this.container.clientWidth || 800;
-    const height = this.container.clientHeight || 600;
+    // Get container dimensions with fallbacks
+    const width = this.getContainerWidth();
+    const height = this.getContainerHeight();
 
     this.camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     this.camera.position.set(10, 10, 10);
@@ -36,11 +37,18 @@ export class Room3D {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    
+
     this.container.appendChild(this.renderer.domElement);
 
+    // Enhanced resize handling
     window.addEventListener('resize', () => this.onWindowResize());
     
+    // Also listen for container size changes
+    if (window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(() => this.onWindowResize());
+      resizeObserver.observe(this.container);
+    }
+
     console.log(`Renderer initialized with size: ${width}x${height}`);
   }
 
@@ -85,6 +93,7 @@ export class Room3D {
       this.camera.position.set(maxDimension * 1.5, maxDimension * 0.8, maxDimension * 1.5);
       this.camera.lookAt(0, 0, 0);
       
+      // Force a resize to ensure proper dimensions after room creation
       setTimeout(() => {
         this.onWindowResize();
       }, 100);
@@ -167,15 +176,34 @@ export class Room3D {
     this.renderer.render(this.scene, this.camera);
   }
 
+  private getContainerWidth(): number {
+    return this.container.clientWidth || this.container.offsetWidth || 800;
+  }
+
+  private getContainerHeight(): number {
+    return this.container.clientHeight || this.container.offsetHeight || window.innerHeight - 70;
+  }
+
   private onWindowResize(): void {
-    const width = this.container.clientWidth || 800;
-    const height = this.container.clientHeight || 600;
-    
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
-    
-    console.log(`Window resized to: ${width}x${height}`);
+    // Use requestAnimationFrame to ensure DOM has updated
+    requestAnimationFrame(() => {
+      const width = this.getContainerWidth();
+      const height = this.getContainerHeight();
+
+      // Ensure we have valid dimensions
+      if (width > 0 && height > 0) {
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(width, height);
+        
+        // Update controls if they exist
+        if (this.controls) {
+          this.controls.update();
+        }
+
+        console.log(`Window resized to: ${width}x${height}`);
+      }
+    });
   }
 
   render(): void {

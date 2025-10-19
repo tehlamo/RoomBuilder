@@ -45,6 +45,9 @@ export class RoomBuilderApp {
           <div id="3d-viewport"></div>
           <div class="controls">
             <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
+            <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
+            <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
+            <button id="reset-view" class="btn-secondary">Reset View</button>
             <button id="save-design" class="btn-primary">Save Design</button>
           </div>
           <div class="instructions">
@@ -182,6 +185,18 @@ export class RoomBuilderApp {
       this.getAISuggestions();
     });
 
+    document.getElementById('edit-mode')?.addEventListener('click', () => {
+      this.toggleEditMode();
+    });
+
+    document.getElementById('delete-selected')?.addEventListener('click', () => {
+      this.deleteSelectedFurniture();
+    });
+
+    document.getElementById('reset-view')?.addEventListener('click', () => {
+      this.resetCameraView();
+    });
+
     document.getElementById('save-design')?.addEventListener('click', () => {
       this.saveDesign();
     });
@@ -312,6 +327,65 @@ export class RoomBuilderApp {
         </div>
       </div>
     `;
+  }
+
+  private toggleEditMode(): void {
+    this.state.isEditing = !this.state.isEditing;
+    const editButton = document.getElementById('edit-mode') as HTMLButtonElement;
+    const deleteButton = document.getElementById('delete-selected') as HTMLButtonElement;
+    
+    if (this.state.isEditing) {
+      editButton.textContent = 'Exit Edit';
+      editButton.classList.add('active');
+      deleteButton.disabled = false;
+      console.log('Edit mode enabled - furniture can be selected and moved');
+    } else {
+      editButton.textContent = 'Edit Mode';
+      editButton.classList.remove('active');
+      deleteButton.disabled = true;
+      this.state.selectedFurniture = null;
+      console.log('Edit mode disabled');
+    }
+  }
+
+  private deleteSelectedFurniture(): void {
+    if (!this.state.selectedFurniture) {
+      alert('Please select a furniture item first');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete "${this.state.selectedFurniture.name}"?`)) {
+      // Remove from furniture manager
+      this.furnitureManager.removeFurniture(this.state.selectedFurniture.id);
+      
+      // Remove from 3D scene
+      this.room3D.removeFurniture(this.state.selectedFurniture.id);
+      
+      // Remove from state
+      this.state.furniture = this.state.furniture.filter(f => f.id !== this.state.selectedFurniture!.id);
+      this.state.selectedFurniture = null;
+      
+      // Update budget display
+      this.updateBudgetDisplay();
+      
+      console.log('Furniture deleted successfully');
+    }
+  }
+
+  private resetCameraView(): void {
+    if (!this.state.roomDimensions || !this.room3D) {
+      alert('Please create a room first');
+      return;
+    }
+
+    // Reset camera to default position
+    const dimensions = this.state.roomDimensions;
+    const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
+    
+    // This would need to be implemented in Room3D class
+    // For now, just log the action
+    console.log('Resetting camera view to default position');
+    alert('Camera view reset (functionality to be implemented)');
   }
 
   private saveDesign(): void {
