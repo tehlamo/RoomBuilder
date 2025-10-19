@@ -29,7 +29,6 @@ export class Room3D {
   private lastMousePosition: THREE.Vector2 = new THREE.Vector2();
   private snapToGrid: boolean = true;
   private gridSize: number = 0.5; // 0.5 unit grid
-  private frameCount: number = 0;
   
   // Selection and handles system
   private selectionBox: THREE.BoxHelper | null = null;
@@ -77,11 +76,9 @@ export class Room3D {
       resizeObserver.observe(this.container);
     }
 
-    console.log(`Renderer initialized with size: ${width}x${height}`);
   }
 
   createRoom(dimensions: RoomDimensions): void {
-    console.log('Creating room with dimensions:', dimensions);
     
     // Store room dimensions for boundary checking
     this.roomDimensions = dimensions;
@@ -102,7 +99,6 @@ export class Room3D {
       this.roomMesh = new THREE.Mesh(roomGeometry, roomMaterial);
       this.roomMesh.position.y = dimensions.height / 2; // Center the room mesh at half height
       this.scene.add(this.roomMesh);
-      console.log('Room mesh created and added to scene');
 
       const floorGeometry = new THREE.PlaneGeometry(dimensions.width, dimensions.length);
       const floorMaterial = new THREE.MeshLambertMaterial({
@@ -140,7 +136,6 @@ export class Room3D {
       // Setup click handling for object selection
       this.setupClickHandling();
       
-      console.log('Room created successfully!');
     } catch (error) {
       console.error('Error creating room:', error);
       throw error;
@@ -177,7 +172,6 @@ export class Room3D {
     // Store furniture data for validation
     this.furniture.push(furniture);
 
-    console.log(`Furniture mesh created for ${furniture.name} at (${furniture.x}, ${furniture.y}, ${furniture.z}) with rotation ${rotation}° (${rotationRadians} rad)`);
   }
 
   removeFurniture(furnitureId: string): void {
@@ -214,7 +208,6 @@ export class Room3D {
     // Clear furniture data array
     this.furniture = [];
     
-    console.log('All furniture and bounding boxes cleared from room');
   }
 
   private addFurnitureLabel(_mesh: THREE.Mesh, _name: string): void {
@@ -304,7 +297,6 @@ export class Room3D {
           this.controls.update();
         }
 
-        console.log(`Window resized to: ${width}x${height}`);
       }
     });
   }
@@ -373,7 +365,6 @@ export class Room3D {
    */
   setManipulationMode(mode: 'none' | 'move' | 'rotate' | 'delete' | 'view'): void {
     this.manipulationMode = mode;
-    console.log('Manipulation mode set to:', mode);
     
     // Clear selection when changing modes
     if (this.selectedFurnitureId) {
@@ -472,11 +463,9 @@ export class Room3D {
 
     // Check if in edit mode - if not, don't allow any manipulation
     if (this.manipulationMode === 'none') {
-      console.log('Not in edit mode - ignoring mouse down');
       return;
     }
 
-    console.log('Mouse down event triggered');
 
     // Calculate mouse position
     const rect = this.renderer.domElement.getBoundingClientRect();
@@ -489,46 +478,24 @@ export class Room3D {
 
     // First check if clicking on a drag handle or rotation sphere
     if (this.dragHandles) {
-      console.log('Checking for handle intersections...');
-      console.log('Drag handles group has', this.dragHandles.children.length, 'children');
-      console.log('Mouse position:', this.mouse.x.toFixed(3), this.mouse.y.toFixed(3));
       const handleIntersects = this.raycaster.intersectObject(this.dragHandles, true);
-      console.log('Handle intersects found:', handleIntersects.length);
-      
-      // Debug: Check each handle individually
-      this.dragHandles.children.forEach((child, index) => {
-        const childIntersects = this.raycaster.intersectObject(child, true);
-        console.log(`Child ${index} (${child.userData.axis}): ${childIntersects.length} intersects, userData:`, child.userData);
-      });
       
       if (handleIntersects.length > 0) {
         const clickedHandle = handleIntersects[0].object as THREE.Mesh;
-        console.log('Clicked object userData:', clickedHandle.userData);
-        console.log('Clicked object position:', clickedHandle.position);
-        console.log('Clicked object axis:', clickedHandle.userData.axis);
         
         if (clickedHandle.userData.isHandle) {
           // Prevent event propagation to camera controls
           event.stopPropagation();
           event.preventDefault();
           
-          console.log('Clicked handle:', clickedHandle.userData);
           if (clickedHandle.userData.type === 'rotate') {
-            console.log('Starting rotation for axis:', clickedHandle.userData.axis);
             this.startRotation(clickedHandle.userData.axis);
           } else {
-            console.log('Starting handle drag for axis:', clickedHandle.userData.axis);
             this.startHandleDrag(clickedHandle.userData.axis);
           }
           return;
-        } else {
-          console.log('Clicked object is not a handle');
         }
-      } else {
-        console.log('No handle intersections found');
       }
-    } else {
-      console.log('No drag handles group found');
     }
 
     // Check if clicking on furniture
@@ -561,7 +528,6 @@ export class Room3D {
         // Disable orbit controls during drag
         this.controls.enabled = false;
         
-        console.log('Started dragging furniture:', furnitureId);
       }
     } else {
       // Clicked on empty space - deselect any selected furniture
@@ -629,7 +595,6 @@ export class Room3D {
       this.isDragging = false;
       this.isDraggingHandle = false;
       this.activeHandle = null;
-      this.frameCount = 0; // Reset frame counter
       
       // Restore cursor
       this.renderer.domElement.style.cursor = 'grab';
@@ -689,7 +654,6 @@ export class Room3D {
    */
   setSnapToGrid(enabled: boolean): void {
     this.snapToGrid = enabled;
-    console.log('Snap to grid:', enabled ? 'enabled' : 'disabled');
   }
 
   /**
@@ -697,7 +661,6 @@ export class Room3D {
    */
   setGridSize(size: number): void {
     this.gridSize = size;
-    console.log('Grid size set to:', size);
   }
 
   /**
@@ -706,11 +669,9 @@ export class Room3D {
   private createSelectionVisuals(furnitureId: string): void {
     const mesh = this.furnitureMeshes.get(furnitureId);
     if (!mesh) {
-      console.log('No mesh found for furniture:', furnitureId);
       return;
     }
 
-    console.log('Creating selection visuals for furniture:', furnitureId);
 
     // Clear any existing selection visuals
     this.clearSelection();
@@ -718,11 +679,9 @@ export class Room3D {
     // Create bounding box
     this.selectionBox = new THREE.BoxHelper(mesh, 0x00ff00);
     this.scene.add(this.selectionBox);
-    console.log('Selection box created');
 
     // Create drag handles
     this.createDragHandles(mesh);
-    console.log('Drag handles creation completed');
   }
 
   /**
@@ -749,76 +708,99 @@ export class Room3D {
     const offsetDistance = Math.max(0.1, maxDimension * 0.1);
     
     // Debug handle sizes
-    console.log('Handle sizes - baseHandleSize:', baseHandleSize, 'handleSize:', handleSize, 'handleLength:', handleLength, 'sphereSize:', sphereSize);
-    console.log('Object dimensions:', size.x, size.y, size.z, 'maxDimension:', maxDimension);
     
     // X-axis handle (red) - horizontal movement (positive direction)
     const xHandle = this.createHandle('x+', new THREE.Vector3(center.x + size.x/2 + offsetDistance, center.y, center.z), 
                                      new THREE.Vector3(handleLength, handleSize, handleSize), 0xff0000);
     this.dragHandles.add(xHandle);
     this.handleMeshes.set('x+', xHandle);
-    console.log('Created X+ handle at position:', xHandle.position, 'userData:', xHandle.userData);
     
     // X-axis handle (red) - horizontal movement (negative direction)
     const xHandleNeg = this.createHandle('x-', new THREE.Vector3(center.x - size.x/2 - offsetDistance, center.y, center.z), 
                                         new THREE.Vector3(handleLength, handleSize, handleSize), 0xff6666);
     this.dragHandles.add(xHandleNeg);
     this.handleMeshes.set('x-', xHandleNeg);
-    console.log('Created X- handle at position:', xHandleNeg.position, 'userData:', xHandleNeg.userData);
     
     // X-axis rotation sphere (Red) - positioned at end of X handle
     const xRotSphere = this.createRotationSphere('x-rot', new THREE.Vector3(center.x + size.x/2 + offsetDistance + handleLength/2 + sphereSize/2, center.y, center.z), 
                                                 sphereSize, 0xff0000);
     this.dragHandles.add(xRotSphere);
     this.handleMeshes.set('x-rot', xRotSphere);
-    console.log('Created X rotation sphere at position:', xRotSphere.position, 'size:', sphereSize, 'userData:', xRotSphere.userData);
     
     // Y-axis handle (green) - vertical movement (positive direction)
     const yHandle = this.createHandle('y+', new THREE.Vector3(center.x, center.y + size.y/2 + offsetDistance, center.z), 
                                      new THREE.Vector3(handleSize, handleLength, handleSize), 0x00ff00);
     this.dragHandles.add(yHandle);
     this.handleMeshes.set('y+', yHandle);
-    console.log('Created Y+ handle at position:', yHandle.position, 'userData:', yHandle.userData);
-    
     // Y-axis handle (green) - vertical movement (negative direction)
     const yHandleNeg = this.createHandle('y-', new THREE.Vector3(center.x, center.y - size.y/2 - offsetDistance, center.z), 
                                         new THREE.Vector3(handleSize, handleLength, handleSize), 0x66ff66);
     this.dragHandles.add(yHandleNeg);
     this.handleMeshes.set('y-', yHandleNeg);
-    console.log('Created Y- handle at position:', yHandleNeg.position, 'userData:', yHandleNeg.userData);
     
     // Y-axis rotation sphere (Green) - positioned at end of Y handle
     const yRotSphere = this.createRotationSphere('y-rot', new THREE.Vector3(center.x, center.y + size.y/2 + offsetDistance + handleLength/2 + sphereSize/2, center.z), 
                                                 sphereSize, 0x00ff00);
     this.dragHandles.add(yRotSphere);
     this.handleMeshes.set('y-rot', yRotSphere);
-    console.log('Created Y rotation sphere at position:', yRotSphere.position, 'size:', sphereSize, 'userData:', yRotSphere.userData);
     
     // Z-axis handle (blue) - depth movement (positive direction)
     const zHandle = this.createHandle('z+', new THREE.Vector3(center.x, center.y, center.z + size.z/2 + offsetDistance), 
                                      new THREE.Vector3(handleSize, handleSize, handleLength), 0x0000ff);
     this.dragHandles.add(zHandle);
     this.handleMeshes.set('z+', zHandle);
-    console.log('Created Z+ handle at position:', zHandle.position, 'userData:', zHandle.userData);
     
     // Z-axis handle (blue) - depth movement (negative direction)
     const zHandleNeg = this.createHandle('z-', new THREE.Vector3(center.x, center.y, center.z - size.z/2 - offsetDistance), 
                                         new THREE.Vector3(handleSize, handleSize, handleLength), 0x6666ff);
     this.dragHandles.add(zHandleNeg);
     this.handleMeshes.set('z-', zHandleNeg);
-    console.log('Created Z- handle at position:', zHandleNeg.position, 'userData:', zHandleNeg.userData);
     
     // Z-axis rotation sphere (Blue) - positioned at end of Z handle
     const zRotSphere = this.createRotationSphere('z-rot', new THREE.Vector3(center.x, center.y, center.z + size.z/2 + offsetDistance + handleLength/2 + sphereSize/2), 
                                                 sphereSize, 0x0000ff);
     this.dragHandles.add(zRotSphere);
     this.handleMeshes.set('z-rot', zRotSphere);
-    console.log('Created Z rotation sphere at position:', zRotSphere.position, 'size:', sphereSize, 'userData:', zRotSphere.userData);
-    
     this.scene.add(this.dragHandles);
-    console.log('Added drag handles group to scene. Total children:', this.dragHandles.children.length);
-    console.log('Handle meshes map size:', this.handleMeshes.size);
-    console.log('Handle meshes keys:', Array.from(this.handleMeshes.keys()));
+  }
+
+  /**
+   * Create a 3D cube logo for the app
+   */
+  createCubeLogo(): THREE.Group {
+    const logoGroup = new THREE.Group();
+    
+    // Create cube geometry
+    const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+    
+    // Create materials for different faces
+    const blueMaterial = new THREE.MeshLambertMaterial({ color: 0x3498db });
+    const whiteMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const grayMaterial = new THREE.MeshLambertMaterial({ color: 0xecf0f1 });
+    
+    // Create the cube mesh
+    const cube = new THREE.Mesh(cubeGeometry, [
+      whiteMaterial,  // Right face
+      whiteMaterial,  // Left face  
+      blueMaterial,   // Top face (this will be the blue one)
+      whiteMaterial,  // Bottom face
+      whiteMaterial,  // Front face
+      grayMaterial    // Back face
+    ]);
+    
+    // Position the cube
+    cube.position.set(0, 0, 0);
+    cube.castShadow = true;
+    cube.receiveShadow = true;
+    
+    logoGroup.add(cube);
+    
+    // Add some lighting for better visibility
+    const logoLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    logoLight.position.set(2, 2, 2);
+    logoGroup.add(logoLight);
+    
+    return logoGroup;
   }
 
   /**
@@ -1048,56 +1030,6 @@ export class Room3D {
     this.renderer.domElement.style.cursor = 'grabbing';
   }
 
-  /**
-   * Move furniture along a specific axis by a fixed distance
-   */
-  private moveFurnitureAlongAxis(axis: string): void {
-    if (!this.selectedFurnitureId) return;
-    
-    const mesh = this.furnitureMeshes.get(this.selectedFurnitureId);
-    if (!mesh) return;
-    
-    // Move distance in feet (1 inch = 1/12 feet ≈ 0.083 feet)
-    const moveDistance = 0.083; // 1 inch
-    const newPosition = mesh.position.clone();
-    
-    // Determine direction based on which side of the handle was clicked
-    switch (axis) {
-      case 'x+':
-        newPosition.x += moveDistance;
-        break;
-      case 'x-':
-        newPosition.x -= moveDistance;
-        break;
-      case 'y+':
-        newPosition.y += moveDistance;
-        break;
-      case 'y-':
-        newPosition.y -= moveDistance;
-        break;
-      case 'z+':
-        newPosition.z += moveDistance;
-        break;
-      case 'z-':
-        newPosition.z -= moveDistance;
-        break;
-    }
-    
-    // Check if new position is valid (within room boundaries)
-    if (this.isPositionValid(newPosition, this.selectedFurnitureId)) {
-      mesh.position.copy(newPosition);
-      this.updateSelectionVisuals();
-      
-      // Update furniture position in state via app instance
-      if (this.appInstance && this.appInstance.updateFurniturePosition) {
-        this.appInstance.updateFurniturePosition(this.selectedFurnitureId, newPosition);
-      }
-      
-      console.log(`Moved furniture along ${axis} axis by 1 inch`);
-    } else {
-      console.log('Move would place furniture outside room boundaries - blocked');
-    }
-  }
 
   /**
    * Check if a position is valid (within room boundaries)
@@ -1180,9 +1112,7 @@ export class Room3D {
         this.appInstance.updateFurnitureRotation(this.selectedFurnitureId, newRotation.y);
       }
       
-      console.log(`Rotated furniture ${axis} by 45 degrees`);
     } else {
-      console.log('Rotation would cause collision - blocked');
     }
   }
 
@@ -1218,7 +1148,6 @@ export class Room3D {
   private selectFurniture(furnitureId: string): void {
     // If in delete mode, delete the furniture immediately
     if (this.manipulationMode === 'delete') {
-      console.log('Deleting furniture:', furnitureId);
       this.removeFurniture(furnitureId);
       
       // Dispatch delete event
@@ -1230,7 +1159,6 @@ export class Room3D {
 
     // If in view mode, just dispatch selection event without creating handles
     if (this.manipulationMode === 'view') {
-      console.log('Viewing furniture:', furnitureId);
       this.selectedFurnitureId = furnitureId;
       this.highlightFurniture(furnitureId, true);
       
@@ -1253,11 +1181,10 @@ export class Room3D {
     this.createSelectionVisuals(furnitureId);
     
     // Disable OrbitControls when furniture is selected in move/rotate/delete modes
-    if (this.manipulationMode === 'move' || this.manipulationMode === 'rotate' || this.manipulationMode === 'delete') {
+    if (this.manipulationMode === 'move' || this.manipulationMode === 'rotate' || (this.manipulationMode as string) === 'delete') {
       this.controls.enabled = false;
     }
     
-    console.log('Selected furniture:', furnitureId);
     
     // Dispatch selection event
     this.container.dispatchEvent(new CustomEvent('furnitureSelected', {
@@ -1310,10 +1237,8 @@ export class Room3D {
     // Check if position is within room boundaries
     if (this.isPositionValid(new THREE.Vector3(newPosition.x, newPosition.y, newPosition.z), furnitureId)) {
       mesh.position.set(newPosition.x, newPosition.y, newPosition.z);
-      console.log(`Moved furniture ${furnitureId} to (${newPosition.x}, ${newPosition.y}, ${newPosition.z})`);
       return true;
     } else {
-      console.log(`Cannot move furniture ${furnitureId} - position outside room boundaries`);
       return false;
     }
   }
@@ -1339,7 +1264,6 @@ export class Room3D {
       mesh.userData.furniture.rotation = currentRotationDegrees;
     }
     
-    console.log(`Rotated furniture ${furnitureId} ${direction} by 45 degrees. New rotation: ${furniture?.rotation}°`);
     return true;
   }
 
@@ -1353,7 +1277,6 @@ export class Room3D {
     // Get furniture dimensions and rotation from the furniture data
     const furniture = this.furniture.find(f => f.id === furnitureId);
     if (!furniture) {
-      console.log(`Furniture not found for ID: ${furnitureId}`);
       return position;
     }
     
@@ -1380,14 +1303,6 @@ export class Room3D {
     const halfRotatedHeight = rotatedHeight / 2;
     const halfRotatedDepth = rotatedDepth / 2;
 
-    // Debug logging for boundary issues
-    console.log('Room boundaries with rotation:', {
-      roomDimensions: this.roomDimensions,
-      furnitureDimensions: { width: furnitureWidth, height: furnitureHeight, depth: furnitureDepth },
-      rotation: rotation * 180 / Math.PI,
-      rotatedDimensions: { width: rotatedWidth, height: rotatedHeight, depth: rotatedDepth },
-      originalPosition: position
-    });
 
     // Constrain each axis using rotated bounding box
     const tolerance = 0.1; // Minimal tolerance for edge clearance
@@ -1396,18 +1311,6 @@ export class Room3D {
     const constrainedY = Math.max(halfRotatedHeight, Math.min(roomHeight - halfRotatedHeight - tolerance, position.y));
     const constrainedZ = Math.max(-roomHalfLength + halfRotatedDepth + tolerance, Math.min(roomHalfLength - halfRotatedDepth - tolerance, position.z));
     
-    console.log('Constrained position with rotation:', {
-      original: position,
-      constrained: { x: constrainedX, y: constrainedY, z: constrainedZ },
-      bounds: {
-        xMin: -roomHalfWidth + halfRotatedWidth + tolerance,
-        xMax: roomHalfWidth - halfRotatedWidth - tolerance,
-        yMin: halfRotatedHeight,
-        yMax: roomHeight - halfRotatedHeight - tolerance,
-        zMin: -roomHalfLength + halfRotatedDepth + tolerance,
-        zMax: roomHalfLength - halfRotatedDepth - tolerance
-      }
-    });
 
     return {
       x: constrainedX,

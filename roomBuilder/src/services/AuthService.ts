@@ -51,7 +51,7 @@ export class AuthService {
     this.isSigningIn = true;
     
     try {
-      const result = await signInWithPopup(auth, this.googleProvider);
+      await signInWithPopup(auth, this.googleProvider);
       // The onAuthStateChanged listener will handle setting this.currentUser
       // Just return the current user after a brief delay to ensure the listener has fired
       return new Promise((resolve) => {

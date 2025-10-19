@@ -5,6 +5,39 @@
   box-sizing: border-box;
 }
 
+/* App Logo Styles */
+.app-logo-section {
+  text-align: center;
+  padding: 20px 15px;
+  border-bottom: 1px solid #e0e0e0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.logo-container {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 15px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.app-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 5px 0;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.app-subtitle {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 0;
+  font-weight: 300;
+}
+
 html, body {
   height: 100%;
   width: 100%;
@@ -2636,8 +2669,3 @@ body {
 }
 
 /* Notification styles for info type */
-.notification-info {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-  color: white;
-  border: 1px solid rgba(52, 152, 219, 0.3);
-}

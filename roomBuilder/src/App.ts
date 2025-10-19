@@ -8,6 +8,7 @@ import {PublishDialog} from './components/PublishDialog';
 import {AuthService} from './services/AuthService';
 import {UserProfile} from './components/UserProfile';
 import {LoginModal} from './components/LoginModal';
+import {CubeLogo} from './components/CubeLogo';
 import * as THREE from 'three';
 
 export class RoomBuilderApp {
@@ -19,6 +20,7 @@ export class RoomBuilderApp {
   private authService!: AuthService;
   private userProfile!: UserProfile;
   private loginModal!: LoginModal;
+  private cubeLogo!: CubeLogo;
   private state: AppState;
   private container: HTMLElement;
   private currentView: 'builder' | 'gallery' = 'builder';
@@ -52,6 +54,7 @@ export class RoomBuilderApp {
     this.container.innerHTML = `
       <div class="app-container">
         <div class="sidebar">
+          <div id="app-logo"></div>
           <div id="user-profile"></div>
           <div id="my-rooms"></div>
           <div id="room-management"></div>
@@ -133,6 +136,7 @@ export class RoomBuilderApp {
       </div>
     `;
 
+    this.setupAppLogo();
     this.setupUserProfile();
     this.setupMyRooms();
     this.setupRoomManagement();
@@ -143,6 +147,21 @@ export class RoomBuilderApp {
     this.setupEventListeners();
     this.setupAuthStateListener();
     this.updateAllButtonStates(); // Set initial button states
+  }
+
+  private setupAppLogo(): void {
+    const logoContainer = document.getElementById('app-logo')!;
+    logoContainer.innerHTML = `
+      <div class="app-logo-section">
+        <div class="logo-container" id="logo-container"></div>
+        <h2 class="app-title">Room Builder</h2>
+        <p class="app-subtitle">3D Room Planner</p>
+      </div>
+    `;
+
+    // Initialize the 3D cube logo
+    const logoElement = document.getElementById('logo-container')!;
+    this.cubeLogo = new CubeLogo(logoElement);
   }
 
   private setupMyRooms(): void {
@@ -931,7 +950,6 @@ export class RoomBuilderApp {
         viewInstructions.classList.remove('hidden');
       }
       
-      console.log('View mode enabled - click furniture to see details');
     } else {
       viewButton.textContent = 'View Mode';
       viewButton.classList.remove('active');
@@ -948,7 +966,6 @@ export class RoomBuilderApp {
         this.room3D.setManipulationMode('none');
       }
       
-      console.log('View mode disabled');
     }
   }
 
@@ -1111,7 +1128,6 @@ export class RoomBuilderApp {
         if (design) {
           // Increment view count when viewing own published design
           await firestoreService.incrementViews(designId);
-          console.log('App: View count incremented for published design:', designId);
           
           // Load the design
           this.loadDesignFromGallery(design);
@@ -1232,7 +1248,6 @@ export class RoomBuilderApp {
           }
         });
         
-        console.log('3D viewport re-initialized successfully');
       } catch (error) {
         console.error('Error re-initializing 3D viewport:', error);
         // Don't show alert here as it might be called during navigation
@@ -1576,7 +1591,6 @@ export class RoomBuilderApp {
         // Refresh the rooms list
         this.loadSavedRooms();
         
-        console.log(`Synced ${addedCount} published rooms to My Rooms`);
       }
     } catch (error) {
       console.error('Error syncing published rooms:', error);
@@ -1852,15 +1866,12 @@ export class RoomBuilderApp {
   private proceedWithDeleteRoom(): void {
     if (!this.state.roomDimensions) {
       // If no room exists, just reset to initial state
-      console.log('No room to delete, resetting to initial state...');
       this.resetToInitialState();
       return;
     }
 
     if (confirm('Are you sure you want to delete the current room? This will remove all furniture and reset the design.')) {
-      console.log('Deleting current room...');
       this.resetToInitialState();
-      console.log('Room deleted successfully');
     }
   }
 
@@ -1894,7 +1905,6 @@ export class RoomBuilderApp {
     this.updateRoomManagementButtons();
     this.updateAllButtonStates(); // Update all buttons including Edit Mode
 
-    console.log('Reset to initial state - ready for new room setup');
   }
 
   private clearCurrentRoom(): void {
@@ -1917,7 +1927,6 @@ export class RoomBuilderApp {
     }
 
     if (confirm('Are you sure you want to clear all furniture from the current room? The room will remain but all furniture will be removed.')) {
-      console.log('Clearing furniture from current room...');
       
       // Clear furniture from 3D scene first
       if (this.room3D) {
@@ -2150,6 +2159,13 @@ export class RoomBuilderApp {
       furniture.y = position.y;
       furniture.z = position.z;
     }
+  }
+
+  /**
+   * Get the cube logo instance
+   */
+  public getCubeLogo(): CubeLogo {
+    return this.cubeLogo;
   }
 
   /**

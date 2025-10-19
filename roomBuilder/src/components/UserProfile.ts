@@ -12,21 +12,15 @@ export class UserProfile {
   render(): void {
     const user = this.authService.getCurrentUser();
     const isAuthenticated = this.authService.isAuthenticated();
-    console.log('UserProfile.render() - Current user:', user);
-    console.log('UserProfile.render() - Is authenticated:', isAuthenticated);
     
     if (user && isAuthenticated) {
-      console.log('UserProfile: Rendering logged-in profile');
       this.renderLoggedInProfile(user);
     } else {
-      console.log('UserProfile: Rendering logged-out profile');
       this.renderLoggedOutProfile();
     }
   }
 
   private renderLoggedInProfile(user: any): void {
-    console.log('Rendering logged in profile for user:', user);
-    console.log('User photoURL:', user.photoURL);
     
     // Create avatar element with proper fallback
     const hasPhotoURL = this.testPhotoURL(user.photoURL);
@@ -111,7 +105,6 @@ export class UserProfile {
     try {
       await this.authService.signOut();
       this.render(); // Re-render to show logged out state
-      console.log('User signed out successfully');
     } catch (error) {
       console.error('Error signing out:', error);
       // Show error message

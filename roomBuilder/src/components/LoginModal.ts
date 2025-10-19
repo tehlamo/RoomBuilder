@@ -85,7 +85,6 @@ export class LoginModal {
     
     // Check if already signing in
     if (this.authService.isCurrentlySigningIn()) {
-      console.log('Already signing in, please wait...');
       return;
     }
     

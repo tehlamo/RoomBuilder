@@ -193,7 +193,7 @@ export class PublishDialog {
         author: userData,
         isPublic,
         tags,
-        thumbnail: designData.thumbnail
+        thumbnail: (designData as any).thumbnail || ''
       });
 
       // Success!

@@ -1,0 +1,30 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="shadowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#34495e;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#2c3e50;stop-opacity:0.6" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 3D Cube with perspective -->
+  <!-- Front face (blue) -->
+  <polygon points="20,15 44,15 44,39 20,39" fill="url(#blueGradient)" stroke="#2980b9" stroke-width="1"/>
+  
+  <!-- Top face (light gray) -->
+  <polygon points="20,15 32,7 56,7 44,15" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="1"/>
+  
+  <!-- Right face (darker gray) -->
+  <polygon points="44,15 56,7 56,31 44,39" fill="url(#shadowGradient)" stroke="#95a5a6" stroke-width="1"/>
+  
+  <!-- Add some depth lines for 3D effect -->
+  <line x1="20" y1="15" x2="32" y2="7" stroke="#bdc3c7" stroke-width="1"/>
+  <line x1="44" y1="15" x2="56" y2="7" stroke="#bdc3c7" stroke-width="1"/>
+  <line x1="44" y1="39" x2="56" y2="31" stroke="#95a5a6" stroke-width="1"/>
+  
+  <!-- Add a subtle highlight to the blue face -->
+  <polygon points="22,17 26,17 26,21 22,21" fill="#5dade2" opacity="0.6"/>
+</svg>

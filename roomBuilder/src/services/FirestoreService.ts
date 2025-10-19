@@ -60,31 +60,18 @@ export class FirestoreService {
 
   private async testConnection(): Promise<void> {
     try {
-      console.log('FirestoreService: Testing Firestore connection...');
       
       // Test basic connection
       const testQuery = query(this.designsCollection, limit(1));
-      const testSnapshot = await getDocs(testQuery);
-      console.log('FirestoreService: Connection successful. Collection size:', testSnapshot.size);
+      await getDocs(testQuery);
       
       // Test public designs query specifically
       const publicQuery = query(this.designsCollection, where('isPublic', '==', true), limit(5));
-      const publicSnapshot = await getDocs(publicQuery);
-      console.log('FirestoreService: Public designs found:', publicSnapshot.size);
+      await getDocs(publicQuery);
       
       // Log all documents in the collection (for debugging)
       const allQuery = query(this.designsCollection, limit(10));
-      const allSnapshot = await getDocs(allQuery);
-      console.log('FirestoreService: All designs in collection:', allSnapshot.size);
-      
-      allSnapshot.forEach((doc) => {
-        const data = doc.data();
-        console.log('FirestoreService: Document:', doc.id, {
-          title: data.title,
-          isPublic: data.isPublic,
-          author: data.author?.displayName
-        });
-      });
+      await getDocs(allQuery);
       
     } catch (error) {
       console.error('FirestoreService: Connection failed:', error);
@@ -121,7 +108,6 @@ export class FirestoreService {
 
       const docRef = await addDoc(this.designsCollection, cleanedDesignData);
       
-      console.log('Design saved with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error saving design:', error);
@@ -140,7 +126,6 @@ export class FirestoreService {
       
       await updateDoc(designRef, cleanedUpdates);
       
-      console.log('Design updated successfully');
     } catch (error) {
       console.error('Error updating design:', error);
       throw error;
@@ -153,7 +138,6 @@ export class FirestoreService {
       const designRef = doc(this.designsCollection, designId);
       await deleteDoc(designRef);
       
-      console.log('Design deleted successfully');
     } catch (error) {
       console.error('Error deleting design:', error);
       throw error;
@@ -175,7 +159,6 @@ export class FirestoreService {
           updatedAt: designData.updatedAt || Date.now()
         };
       } else {
-        console.log('No such design!');
         return null;
       }
     } catch (error) {
@@ -191,7 +174,6 @@ export class FirestoreService {
     hasMore: boolean;
   }> {
     try {
-      console.log('FirestoreService: Getting public designs with filters:', filters);
       let q = query(
         this.designsCollection,
         where('isPublic', '==', true)
@@ -250,16 +232,14 @@ export class FirestoreService {
       const querySnapshot = await getDocs(q);
       const designs: PublishedDesign[] = [];
       
-      console.log('FirestoreService: Query snapshot size:', querySnapshot.size);
       
       querySnapshot.forEach((doc) => {
         try {
           const data = doc.data() as Omit<PublishedDesign, 'id'>;
-          console.log('FirestoreService: Processing design:', doc.id, data.title);
           
           // Handle timestamp conversion
-          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
-          const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt || Date.now());
+          const createdAt = (data.createdAt as any)?.toDate ? (data.createdAt as any).toDate() : new Date(data.createdAt || Date.now());
+          const updatedAt = (data.updatedAt as any)?.toDate ? (data.updatedAt as any).toDate() : new Date(data.updatedAt || Date.now());
           
           designs.push({
             id: doc.id,
@@ -275,8 +255,6 @@ export class FirestoreService {
       const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
       const hasMore = querySnapshot.docs.length === filters.limit;
 
-      console.log('FirestoreService: Query completed. Found', designs.length, 'designs');
-      console.log('FirestoreService: Has more:', hasMore);
 
       return {
         designs,
@@ -292,7 +270,6 @@ export class FirestoreService {
   // Test method to create a sample design for debugging
   async createTestDesign(): Promise<void> {
     try {
-      console.log('FirestoreService: Creating test design...');
       const testDesign = {
         title: 'Test Design',
         description: 'This is a test design to verify Firestore connectivity',
@@ -313,8 +290,7 @@ export class FirestoreService {
         views: 0
       };
 
-      const docRef = await addDoc(this.designsCollection, testDesign);
-      console.log('FirestoreService: Test design created with ID:', docRef.id);
+      await addDoc(this.designsCollection, testDesign);
     } catch (error) {
       console.error('FirestoreService: Error creating test design:', error);
     }
@@ -377,16 +353,6 @@ export class FirestoreService {
     }
   }
 
-  // Remove design from user's liked designs
-  private removeLikedDesign(userId: string, designId: string): void {
-    const likedDesigns = this.getLikedDesigns(userId);
-    const index = likedDesigns.indexOf(designId);
-    if (index > -1) {
-      likedDesigns.splice(index, 1);
-      const key = `likedDesigns_${userId}`;
-      localStorage.setItem(key, JSON.stringify(likedDesigns));
-    }
-  }
 
   // Like a design
   async likeDesign(designId: string, userId?: string): Promise<void> {
@@ -408,7 +374,6 @@ export class FirestoreService {
       // Add to user's liked designs
       this.addLikedDesign(userId, designId);
       
-      console.log('Design liked successfully');
     } catch (error) {
       console.error('Error liking design:', error);
       throw error;
@@ -421,7 +386,6 @@ export class FirestoreService {
       // Check if user has already viewed this design in this session
       const viewedKey = `viewed_${designId}`;
       if (sessionStorage.getItem(viewedKey)) {
-        console.log('View already counted for this session:', designId);
         return;
       }
 
@@ -432,7 +396,6 @@ export class FirestoreService {
 
       // Mark as viewed in this session
       sessionStorage.setItem(viewedKey, 'true');
-      console.log('View count incremented for design:', designId);
     } catch (error) {
       console.error('Error incrementing views:', error);
       // Don't throw error for view counting failures
@@ -458,7 +421,6 @@ export class FirestoreService {
       
       const docRef = await addDoc(this.commentsCollection, cleanedComment);
       
-      console.log('Comment added with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error adding comment:', error);
@@ -505,7 +467,6 @@ export class FirestoreService {
       
       await updateDoc(profileRef, cleanedProfileData);
       
-      console.log('User profile updated successfully');
     } catch (error) {
       console.error('Error updating user profile:', error);
       throw error;

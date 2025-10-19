@@ -21,25 +21,16 @@ export class DesignGallery {
   }
 
   async initialize(): Promise<void> {
-    console.log('Initializing DesignGallery...');
-    console.log('AuthService isAuthenticated:', this.authService.isAuthenticated());
-    console.log('Current user:', this.authService.getCurrentUser());
     
     // Check if user is authenticated
     if (!this.authService.isAuthenticated()) {
-      console.log('User not authenticated, showing auth required screen');
       this.showAuthenticationRequired();
       return;
     }
     
-    console.log('User is authenticated, proceeding with gallery initialization');
-    const currentUser = this.authService.getCurrentUser();
-    console.log(`Welcome back, ${currentUser?.displayName || 'User'}! Loading community designs...`);
-    
     this.renderGallery();
     this.setupEventListeners();
     await this.loadDesigns(true); // Reset on initial load
-    console.log('DesignGallery initialization complete');
   }
 
   private renderGallery(): void {
@@ -109,17 +100,14 @@ export class DesignGallery {
   }
 
   private async loadDesigns(reset: boolean = true): Promise<void> {
-    console.log('DesignGallery: loadDesigns called with reset:', reset);
     
     if (reset) {
       this.lastDoc = null;
       this.hasMore = true;
       document.getElementById('designs-grid')!.innerHTML = '';
-      console.log('DesignGallery: Reset state, cleared grid');
     }
 
     if (!this.hasMore) {
-      console.log('DesignGallery: No more designs to load, returning');
       return;
     }
 
@@ -128,12 +116,7 @@ export class DesignGallery {
       document.getElementById('load-more-btn')!.style.display = 'none';
 
       const filters = { ...this.currentFilters, lastDoc: this.lastDoc };
-      console.log('Loading designs with filters:', filters);
-      
       const result = await this.firestoreService.getPublicDesigns(filters);
-      console.log('DesignGallery: Firestore result:', result);
-      console.log('DesignGallery: Number of designs loaded:', result.designs.length);
-      console.log('DesignGallery: Has more:', result.hasMore);
 
       this.lastDoc = result.lastDoc;
       this.hasMore = result.hasMore;
@@ -143,15 +126,12 @@ export class DesignGallery {
       }
 
       if (result.designs.length === 0) {
-        console.log('DesignGallery: No designs found, showing no designs message');
         // Only show no designs message if this is a reset (first load)
         if (reset) {
           this.showNoDesignsMessage();
         }
       } else {
-        console.log('DesignGallery: Found designs, adding cards:', result.designs.length);
         result.designs.forEach(design => {
-          console.log('DesignGallery: Adding design card for:', design.title);
           this.addDesignCard(design);
         });
       }
@@ -169,7 +149,6 @@ export class DesignGallery {
   }
 
   private addDesignCard(design: PublishedDesign): void {
-    console.log('DesignGallery: addDesignCard called for:', design.title);
     const grid = document.getElementById('designs-grid')!;
     if (!grid) {
       console.error('DesignGallery: designs-grid element not found!');
@@ -218,7 +197,6 @@ export class DesignGallery {
     `;
 
     grid.appendChild(card);
-    console.log('DesignGallery: Card added to grid, total cards:', grid.children.length);
   }
 
   private setupEventListeners(): void {
@@ -258,7 +236,6 @@ export class DesignGallery {
     document.getElementById('create-test-design')?.addEventListener('click', async () => {
       try {
         await this.firestoreService.createTestDesign();
-        console.log('Test design created, reloading gallery...');
         await this.loadDesigns(true);
       } catch (error) {
         console.error('Error creating test design:', error);
@@ -281,11 +258,9 @@ export class DesignGallery {
     // Design card interactions
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
-      console.log('DesignGallery: Click event on:', target.className, target.tagName);
       
       if (target.classList.contains('view-design-btn')) {
         const designId = target.getAttribute('data-design-id');
-        console.log('DesignGallery: View design button clicked, designId:', designId);
         if (designId) {
           this.viewDesign(designId);
         }
@@ -308,7 +283,6 @@ export class DesignGallery {
     }
 
     try {
-      console.log('DesignGallery: Viewing design with ID:', designId);
       
       // Get the design data first
       const design = await this.firestoreService.getDesign(designId);
@@ -316,11 +290,9 @@ export class DesignGallery {
         throw new Error('Design not found');
       }
       
-      console.log('DesignGallery: Design found:', design.title);
       
       // Increment view count when someone loads a design
       await this.firestoreService.incrementViews(designId);
-      console.log('DesignGallery: View count incremented for design:', designId);
       
       // Emit event to load design in builder
       this.container.dispatchEvent(new CustomEvent('designSelected', {
@@ -357,12 +329,11 @@ export class DesignGallery {
       
       // Also increment view count when someone likes a design (engagement)
       await this.firestoreService.incrementViews(designId);
-      console.log('DesignGallery: View count incremented for liked design:', designId);
       
       // Update UI
       button.innerHTML = '<i class="icon-heart"></i> Liked!';
       button.classList.add('liked');
-      button.disabled = true; // Disable the button to prevent multiple clicks
+      (button as HTMLButtonElement).disabled = true; // Disable the button to prevent multiple clicks
       
       // Update the like count in the card
       const card = button.closest('.design-card');
@@ -373,9 +344,9 @@ export class DesignGallery {
       }
     } catch (error) {
       console.error('Error liking design:', error);
-      if (error.message && error.message.includes('permission')) {
+      if (error instanceof Error && error.message && error.message.includes('permission')) {
         this.showError('Please sign in to like designs.');
-      } else if (error.message && error.message.includes('already liked')) {
+      } else if (error instanceof Error && error.message && error.message.includes('already liked')) {
         this.showError('You have already liked this design.');
       } else {
         this.showError('Failed to like design. Please try again.');

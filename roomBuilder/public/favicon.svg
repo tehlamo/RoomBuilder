@@ -1,0 +1,23 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 3D Cube with perspective -->
+  <!-- Front face (blue) -->
+  <polygon points="10,8 22,8 22,20 10,20" fill="url(#blueGradient)"/>
+  
+  <!-- Top face (light gray) -->
+  <polygon points="10,8 16,4 28,4 22,8" fill="#ecf0f1"/>
+  
+  <!-- Right face (darker gray) -->
+  <polygon points="22,8 28,4 28,16 22,20" fill="#34495e" opacity="0.7"/>
+  
+  <!-- Add depth lines -->
+  <line x1="10" y1="8" x2="16" y2="4" stroke="#bdc3c7" stroke-width="0.5"/>
+  <line x1="22" y1="8" x2="28" y2="4" stroke="#bdc3c7" stroke-width="0.5"/>
+  <line x1="22" y1="20" x2="28" y2="16" stroke="#95a5a6" stroke-width="0.5"/>
+</svg>
