@@ -114,15 +114,15 @@ export class Room3D {
     mesh.rotation.y = (furniture.rotation * Math.PI) / 180;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    
+
     // Make furniture interactive
     mesh.userData = { furnitureId: furniture.id, furniture: furniture };
     mesh.name = furniture.name;
-    
+
     this.addFurnitureLabel(mesh, furniture.name);
     this.scene.add(mesh);
     this.furnitureMeshes.set(furniture.id, mesh);
-    
+
     console.log(`Furniture mesh created for ${furniture.name} at (${furniture.x}, ${furniture.y}, ${furniture.z})`);
   }
 
@@ -134,8 +134,9 @@ export class Room3D {
     }
   }
 
-  private addFurnitureLabel(mesh: THREE.Mesh, name: string): void {
-    // Placeholder for furniture labels
+  private addFurnitureLabel(_mesh: THREE.Mesh, _name: string): void {
+    // You can implement text labels here using TextGeometry or HTML overlays
+    // For now, we'll skip this for simplicity
   }
 
   private setupLighting(): void {
@@ -167,12 +168,12 @@ export class Room3D {
 
   private animate(): void {
     requestAnimationFrame(() => this.animate());
-    
+
     // Update controls
     if (this.controls) {
       this.controls.update();
     }
-    
+
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -195,7 +196,7 @@ export class Room3D {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
-        
+
         // Update controls if they exist
         if (this.controls) {
           this.controls.update();
@@ -210,28 +211,30 @@ export class Room3D {
     this.renderer.render(this.scene, this.camera);
   }
 
+  // Method to get furniture information at a specific screen position
   getFurnitureAtPosition(x: number, y: number): Furniture | null {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
-    
+
     // Convert screen coordinates to normalized device coordinates
     mouse.x = (x / this.container.clientWidth) * 2 - 1;
     mouse.y = -(y / this.container.clientHeight) * 2 + 1;
-    
+
     raycaster.setFromCamera(mouse, this.camera);
-    
+
     // Get all furniture meshes
     const furnitureMeshes = Array.from(this.furnitureMeshes.values());
     const intersects = raycaster.intersectObjects(furnitureMeshes);
-    
+
     if (intersects.length > 0) {
       const furniture = intersects[0].object.userData.furniture;
       return furniture;
     }
-    
+
     return null;
   }
 
+  // Method to highlight selected furniture
   highlightFurniture(furnitureId: string, highlight: boolean): void {
     const mesh = this.furnitureMeshes.get(furnitureId);
     if (mesh) {

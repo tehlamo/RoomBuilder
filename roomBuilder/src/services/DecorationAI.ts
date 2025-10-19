@@ -3,15 +3,15 @@ import type { Furniture } from '../types/Furniture';
 import type { DecorationSuggestion } from '../types/App';
 
 export class DecorationAI {
-  private isInitialized: boolean = false;
+  // AI service placeholder
 
   constructor() {
     // AI service placeholder
   }
 
   async getDecorationSuggestions(
-    roomDimensions: RoomDimensions,
-    existingFurniture: Furniture[],
+    _roomDimensions: RoomDimensions,
+    _existingFurniture: Furniture[],
     roomType: string,
     budget: number
   ): Promise<DecorationSuggestion[]> {
@@ -19,7 +19,7 @@ export class DecorationAI {
     return this.getFallbackSuggestions(roomType, budget);
   }
 
-  private getFallbackSuggestions(roomType: string, budget: number): DecorationSuggestion[] {
+  private getFallbackSuggestions(_roomType: string, budget: number): DecorationSuggestion[] {
     const suggestions: DecorationSuggestion[] = [
       {
         item: 'Wall Art',

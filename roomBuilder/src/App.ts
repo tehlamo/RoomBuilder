@@ -1,16 +1,26 @@
 import type {RoomDimensions} from './types/Room';
-import type {Furniture} from './types/Furniture';
 import type {AppState} from './types/App';
 import {Room3D} from './components/Room3D';
 import {FurnitureManager} from './components/FurnitureManager';
 import {DecorationAI} from './services/DecorationAI';
+import {DesignGallery} from './components/DesignGallery';
+import {PublishDialog} from './components/PublishDialog';
+import {AuthService} from './services/AuthService';
+import {UserProfile} from './components/UserProfile';
+import {LoginModal} from './components/LoginModal';
 
 export class RoomBuilderApp {
   private room3D!: Room3D;
   private furnitureManager!: FurnitureManager;
   private decorationAI!: DecorationAI;
+  private designGallery!: DesignGallery;
+  private publishDialog!: PublishDialog;
+  private authService!: AuthService;
+  private userProfile!: UserProfile;
+  private loginModal!: LoginModal;
   private state: AppState;
   private container: HTMLElement;
+  private currentView: 'builder' | 'gallery' = 'builder';
 
   constructor() {
     this.container = document.getElementById('app')!;
@@ -30,12 +40,16 @@ export class RoomBuilderApp {
   private initializeServices(): void {
     this.furnitureManager = new FurnitureManager();
     this.decorationAI = new DecorationAI();
+    this.publishDialog = new PublishDialog(this.container);
+    this.authService = new AuthService();
+    this.loginModal = new LoginModal(this.container);
   }
 
   private initializeUI(): void {
     this.container.innerHTML = `
       <div class="app-container">
         <div class="sidebar">
+          <div id="user-profile"></div>
           <div id="room-setup"></div>
           <div id="furniture-palette"></div>
           <div id="suggestions"></div>
@@ -48,7 +62,8 @@ export class RoomBuilderApp {
             <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
             <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
             <button id="reset-view" class="btn-secondary">Reset View</button>
-            <button id="save-design" class="btn-primary">Save Design</button>
+            <button id="publish-design" class="btn-primary">Publish Design</button>
+            <button id="browse-designs" class="btn-secondary">Browse Community</button>
           </div>
           <div class="instructions">
             <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
@@ -58,10 +73,12 @@ export class RoomBuilderApp {
       </div>
     `;
 
+    this.setupUserProfile();
     this.setupRoomInput();
     this.setupFurniturePalette();
     this.setupBudgetTracker();
     this.setupEventListeners();
+    this.setupAuthStateListener();
   }
 
   private setupRoomInput(): void {
@@ -197,8 +214,12 @@ export class RoomBuilderApp {
       this.resetCameraView();
     });
 
-    document.getElementById('save-design')?.addEventListener('click', () => {
-      this.saveDesign();
+    document.getElementById('publish-design')?.addEventListener('click', () => {
+      this.publishDesign();
+    });
+
+    document.getElementById('browse-designs')?.addEventListener('click', () => {
+      this.toggleGallery();
     });
   }
 
@@ -378,29 +399,190 @@ export class RoomBuilderApp {
       return;
     }
 
-    // Reset camera to default position
-    const dimensions = this.state.roomDimensions;
-    const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
-    
     // This would need to be implemented in Room3D class
     // For now, just log the action
     console.log('Resetting camera view to default position');
     alert('Camera view reset (functionality to be implemented)');
   }
 
-  private saveDesign(): void {
-    const design = {
+  private publishDesign(): void {
+    if (!this.state.roomDimensions || this.state.furniture.length === 0) {
+      alert('Please create a room and add some furniture before publishing.');
+      return;
+    }
+
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with publishing
+        this.proceedWithPublishing();
+      });
+      return;
+    }
+
+    this.proceedWithPublishing();
+  }
+
+  private proceedWithPublishing(): void {
+    if (!this.state.roomDimensions) {
+      alert('Room dimensions are required for publishing.');
+      return;
+    }
+
+    const designData = {
       roomDimensions: this.state.roomDimensions,
       furniture: this.state.furniture,
       budget: this.state.budget,
-      timestamp: new Date().toISOString()
+      roomType: this.state.roomType
     };
 
-    // Save to localStorage
-    const savedDesigns = JSON.parse(localStorage.getItem('roomDesigns') || '[]');
-    savedDesigns.push(design);
-    localStorage.setItem('roomDesigns', JSON.stringify(savedDesigns));
-
-    alert('Design saved successfully!');
+    this.publishDialog.show(designData, (designId) => {
+      console.log('Design published with ID:', designId);
+      // Optionally switch to gallery view to see the published design
+      this.toggleGallery();
+    });
   }
+
+  private toggleGallery(): void {
+    if (this.currentView === 'builder') {
+      this.showGallery();
+    } else {
+      this.showBuilder();
+    }
+  }
+
+  private showGallery(): void {
+    this.currentView = 'gallery';
+    
+    // Hide the main content and show gallery
+    const mainContent = document.querySelector('.main-content') as HTMLElement;
+    mainContent.innerHTML = '<div id="gallery-container"></div>';
+    
+    // Initialize and show the gallery
+    const galleryContainer = document.getElementById('gallery-container')!;
+    this.designGallery = new DesignGallery(galleryContainer);
+    this.designGallery.initialize();
+
+    // Listen for design selection
+    galleryContainer.addEventListener('designSelected', (e: any) => {
+      const design = e.detail.design;
+      this.loadDesignFromGallery(design);
+    });
+
+    // Update button text
+    const browseBtn = document.getElementById('browse-designs') as HTMLButtonElement;
+    browseBtn.textContent = 'Back to Builder';
+  }
+
+  private showBuilder(): void {
+    this.currentView = 'builder';
+    
+    // Restore the main content
+    const mainContent = document.querySelector('.main-content') as HTMLElement;
+    mainContent.innerHTML = `
+      <div id="3d-viewport"></div>
+      <div class="controls">
+        <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
+        <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
+        <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
+        <button id="reset-view" class="btn-secondary">Reset View</button>
+        <button id="publish-design" class="btn-primary">Publish Design</button>
+        <button id="browse-designs" class="btn-secondary">Browse Community</button>
+      </div>
+      <div class="instructions">
+        <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
+        <p><strong>Furniture:</strong> Click items in the sidebar to add them to your room</p>
+      </div>
+    `;
+
+    // Re-setup event listeners
+    this.setupEventListeners();
+
+    // Re-initialize 3D viewport if room exists
+    if (this.state.roomDimensions && this.room3D) {
+      const viewport = document.getElementById('3d-viewport')!;
+      this.room3D = new Room3D(viewport);
+      this.room3D.createRoom(this.state.roomDimensions);
+      
+      // Re-add furniture
+      this.state.furniture.forEach(furniture => {
+        this.room3D.addFurniture(furniture);
+      });
+    }
+
+    // Update button text
+    const browseBtn = document.getElementById('browse-designs') as HTMLButtonElement;
+    browseBtn.textContent = 'Browse Community';
+  }
+
+  private loadDesignFromGallery(design: any): void {
+    // Switch back to builder view
+    this.showBuilder();
+    
+    // Load the design data
+    this.state.roomDimensions = design.roomDimensions;
+    this.state.furniture = design.furniture;
+    this.state.budget = design.budget;
+    this.state.roomType = design.roomType;
+
+    // Update the UI
+    this.updateBudgetDisplay();
+    
+    // Create the room and add furniture
+    if (this.state.roomDimensions) {
+      const viewport = document.getElementById('3d-viewport')!;
+      this.room3D = new Room3D(viewport);
+      this.room3D.createRoom(this.state.roomDimensions);
+      
+      // Add furniture
+      this.state.furniture.forEach(furniture => {
+        this.room3D.addFurniture(furniture);
+      });
+    }
+
+    console.log('Loaded design from gallery:', design.title);
+  }
+
+  // Removed unused saveDesign method - using publishDesign instead
+
+  private setupUserProfile(): void {
+    const userProfileContainer = document.getElementById('user-profile')!;
+    this.userProfile = new UserProfile(userProfileContainer);
+    this.userProfile.render();
+
+    // Listen for login requests
+    userProfileContainer.addEventListener('requestLogin', () => {
+      this.loginModal.show(() => {
+        // Refresh user profile after login
+        this.userProfile.refresh();
+      });
+    });
+  }
+
+  private setupAuthStateListener(): void {
+    // Listen for authentication state changes
+    this.authService.onAuthStateChange(() => {
+      // Refresh user profile when auth state changes
+      if (this.userProfile) {
+        this.userProfile.refresh();
+      }
+      
+      // Update publish button state based on authentication
+      this.updatePublishButtonState();
+    });
+  }
+
+  private updatePublishButtonState(): void {
+    const publishBtn = document.getElementById('publish-design') as HTMLButtonElement;
+    if (publishBtn) {
+      if (this.authService.isAuthenticated()) {
+        publishBtn.textContent = 'Publish Design';
+        publishBtn.title = 'Publish your design to the community';
+      } else {
+        publishBtn.textContent = 'Sign in to Publish';
+        publishBtn.title = 'Sign in with Google to publish your design';
+      }
+    }
+  }
+
 }
