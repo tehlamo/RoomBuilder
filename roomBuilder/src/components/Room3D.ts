@@ -15,7 +15,7 @@ export class Room3D {
   private container: HTMLElement;
   
   // Manipulation system
-  private manipulationMode: 'none' | 'move' | 'rotate' | 'delete' = 'none';
+  private manipulationMode: 'none' | 'move' | 'rotate' | 'delete' | 'view' = 'none';
   private selectedFurnitureId: string | null = null;
   private roomDimensions: RoomDimensions | null = null;
   private raycaster: THREE.Raycaster = new THREE.Raycaster();
@@ -153,7 +153,13 @@ export class Room3D {
     const mesh = new THREE.Mesh(geometry, material);
 
     mesh.position.set(furniture.x, furniture.y, furniture.z);
-    mesh.rotation.y = (furniture.rotation * Math.PI) / 180;
+    
+    // Apply rotation properly - convert degrees to radians
+    // Handle backward compatibility for old designs without rotation data
+    const rotation = typeof furniture.rotation === 'number' ? furniture.rotation : 0;
+    const rotationRadians = rotation * (Math.PI / 180);
+    mesh.rotation.y = rotationRadians;
+    
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
@@ -171,7 +177,7 @@ export class Room3D {
     // Store furniture data for validation
     this.furniture.push(furniture);
 
-    console.log(`Furniture mesh created for ${furniture.name} at (${furniture.x}, ${furniture.y}, ${furniture.z})`);
+    console.log(`Furniture mesh created for ${furniture.name} at (${furniture.x}, ${furniture.y}, ${furniture.z}) with rotation ${rotation}° (${rotationRadians} rad)`);
   }
 
   removeFurniture(furnitureId: string): void {
@@ -365,7 +371,7 @@ export class Room3D {
   /**
    * Set the manipulation mode
    */
-  setManipulationMode(mode: 'none' | 'move' | 'rotate' | 'delete'): void {
+  setManipulationMode(mode: 'none' | 'move' | 'rotate' | 'delete' | 'view'): void {
     this.manipulationMode = mode;
     console.log('Manipulation mode set to:', mode);
     
@@ -374,6 +380,11 @@ export class Room3D {
       this.highlightFurniture(this.selectedFurnitureId, false);
       this.selectedFurnitureId = null;
     }
+
+    // Enable/disable OrbitControls based on mode
+    // Controls should be enabled for 'none' and 'view' modes
+    // Disabled for 'move', 'rotate', and 'delete' modes when furniture is selected
+    this.controls.enabled = (mode === 'none' || mode === 'view');
   }
 
   /**
@@ -487,7 +498,7 @@ export class Room3D {
       // Debug: Check each handle individually
       this.dragHandles.children.forEach((child, index) => {
         const childIntersects = this.raycaster.intersectObject(child, true);
-        console.log(`Child ${index} (${child.userData.axis}): ${childIntersects.length} intersects`);
+        console.log(`Child ${index} (${child.userData.axis}): ${childIntersects.length} intersects, userData:`, child.userData);
       });
       
       if (handleIntersects.length > 0) {
@@ -497,13 +508,16 @@ export class Room3D {
         console.log('Clicked object axis:', clickedHandle.userData.axis);
         
         if (clickedHandle.userData.isHandle) {
+          // Prevent event propagation to camera controls
+          event.stopPropagation();
+          event.preventDefault();
+          
           console.log('Clicked handle:', clickedHandle.userData);
           if (clickedHandle.userData.type === 'rotate') {
             console.log('Starting rotation for axis:', clickedHandle.userData.axis);
             this.startRotation(clickedHandle.userData.axis);
           } else {
             console.log('Starting handle drag for axis:', clickedHandle.userData.axis);
-            console.log('X/Z handle clicked - this should work!');
             this.startHandleDrag(clickedHandle.userData.axis);
           }
           return;
@@ -549,6 +563,11 @@ export class Room3D {
         
         console.log('Started dragging furniture:', furnitureId);
       }
+    } else {
+      // Clicked on empty space - deselect any selected furniture
+      if (this.selectedFurnitureId) {
+        this.deselectFurniture();
+      }
     }
   }
 
@@ -566,14 +585,13 @@ export class Room3D {
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     
-    // Handle different types of dragging with optimized performance
-    if (this.isDraggingHandle && this.activeHandle) {
-      // Handle drag with axis constraints - most responsive
-      console.log('Calling handleHandleDrag for axis:', this.activeHandle);
-      this.handleHandleDrag();
-    } else if (this.isDragging && this.selectedFurnitureId) {
-      // Regular floor-based dragging - optimized updates for smoothness
-      if (this.frameCount % 1 === 0) { // Update every frame for maximum smoothness
+    // Handle different types of dragging with maximum smoothness
+    if (this.isDragging && this.selectedFurnitureId) {
+      if (this.isDraggingHandle) {
+        // Handle dragging - ultra-smooth axis-based movement
+        this.handleHandleDrag();
+      } else {
+        // Regular floor-based dragging - every frame for maximum smoothness
         const intersectionPoint = this.getIntersectionWithFloor(this.mouse);
         if (intersectionPoint) {
           // Calculate new position
@@ -584,7 +602,7 @@ export class Room3D {
             newPosition = this.snapPositionToGrid(newPosition);
           }
           
-          // Apply smooth boundary constraints instead of blocking
+          // Apply smooth boundary constraints
           const constrainedPosition = this.constrainToRoomBoundaries(newPosition, this.selectedFurnitureId);
           
           // Update furniture position
@@ -592,14 +610,11 @@ export class Room3D {
           if (mesh) {
             mesh.position.copy(constrainedPosition);
             
-            // Update visuals for smooth feedback
-            if (this.frameCount % 2 === 0) {
-              this.updateSelectionVisuals();
-            }
+            // Update visuals every frame for smooth feedback
+            this.updateSelectionVisuals();
           }
         }
       }
-      this.frameCount++;
     } else {
       // Handle hover effects only when not dragging
       this.handleHoverEffects();
@@ -737,43 +752,68 @@ export class Room3D {
     console.log('Handle sizes - baseHandleSize:', baseHandleSize, 'handleSize:', handleSize, 'handleLength:', handleLength, 'sphereSize:', sphereSize);
     console.log('Object dimensions:', size.x, size.y, size.z, 'maxDimension:', maxDimension);
     
-    // X-axis handle (red) - horizontal movement
-    const xHandle = this.createHandle('x', new THREE.Vector3(center.x + size.x/2 + offsetDistance, center.y, center.z), 
+    // X-axis handle (red) - horizontal movement (positive direction)
+    const xHandle = this.createHandle('x+', new THREE.Vector3(center.x + size.x/2 + offsetDistance, center.y, center.z), 
                                      new THREE.Vector3(handleLength, handleSize, handleSize), 0xff0000);
     this.dragHandles.add(xHandle);
-    this.handleMeshes.set('x', xHandle);
-    console.log('Created X handle at position:', xHandle.position, 'userData:', xHandle.userData);
+    this.handleMeshes.set('x+', xHandle);
+    console.log('Created X+ handle at position:', xHandle.position, 'userData:', xHandle.userData);
+    
+    // X-axis handle (red) - horizontal movement (negative direction)
+    const xHandleNeg = this.createHandle('x-', new THREE.Vector3(center.x - size.x/2 - offsetDistance, center.y, center.z), 
+                                        new THREE.Vector3(handleLength, handleSize, handleSize), 0xff6666);
+    this.dragHandles.add(xHandleNeg);
+    this.handleMeshes.set('x-', xHandleNeg);
+    console.log('Created X- handle at position:', xHandleNeg.position, 'userData:', xHandleNeg.userData);
     
     // X-axis rotation sphere (Red) - positioned at end of X handle
     const xRotSphere = this.createRotationSphere('x-rot', new THREE.Vector3(center.x + size.x/2 + offsetDistance + handleLength/2 + sphereSize/2, center.y, center.z), 
                                                 sphereSize, 0xff0000);
     this.dragHandles.add(xRotSphere);
     this.handleMeshes.set('x-rot', xRotSphere);
+    console.log('Created X rotation sphere at position:', xRotSphere.position, 'size:', sphereSize, 'userData:', xRotSphere.userData);
     
-    // Y-axis handle (green) - vertical movement
-    const yHandle = this.createHandle('y', new THREE.Vector3(center.x, center.y + size.y/2 + offsetDistance, center.z), 
+    // Y-axis handle (green) - vertical movement (positive direction)
+    const yHandle = this.createHandle('y+', new THREE.Vector3(center.x, center.y + size.y/2 + offsetDistance, center.z), 
                                      new THREE.Vector3(handleSize, handleLength, handleSize), 0x00ff00);
     this.dragHandles.add(yHandle);
-    this.handleMeshes.set('y', yHandle);
+    this.handleMeshes.set('y+', yHandle);
+    console.log('Created Y+ handle at position:', yHandle.position, 'userData:', yHandle.userData);
+    
+    // Y-axis handle (green) - vertical movement (negative direction)
+    const yHandleNeg = this.createHandle('y-', new THREE.Vector3(center.x, center.y - size.y/2 - offsetDistance, center.z), 
+                                        new THREE.Vector3(handleSize, handleLength, handleSize), 0x66ff66);
+    this.dragHandles.add(yHandleNeg);
+    this.handleMeshes.set('y-', yHandleNeg);
+    console.log('Created Y- handle at position:', yHandleNeg.position, 'userData:', yHandleNeg.userData);
     
     // Y-axis rotation sphere (Green) - positioned at end of Y handle
     const yRotSphere = this.createRotationSphere('y-rot', new THREE.Vector3(center.x, center.y + size.y/2 + offsetDistance + handleLength/2 + sphereSize/2, center.z), 
                                                 sphereSize, 0x00ff00);
     this.dragHandles.add(yRotSphere);
     this.handleMeshes.set('y-rot', yRotSphere);
+    console.log('Created Y rotation sphere at position:', yRotSphere.position, 'size:', sphereSize, 'userData:', yRotSphere.userData);
     
-    // Z-axis handle (blue) - depth movement
-    const zHandle = this.createHandle('z', new THREE.Vector3(center.x, center.y, center.z + size.z/2 + offsetDistance), 
+    // Z-axis handle (blue) - depth movement (positive direction)
+    const zHandle = this.createHandle('z+', new THREE.Vector3(center.x, center.y, center.z + size.z/2 + offsetDistance), 
                                      new THREE.Vector3(handleSize, handleSize, handleLength), 0x0000ff);
     this.dragHandles.add(zHandle);
-    this.handleMeshes.set('z', zHandle);
-    console.log('Created Z handle at position:', zHandle.position, 'userData:', zHandle.userData);
+    this.handleMeshes.set('z+', zHandle);
+    console.log('Created Z+ handle at position:', zHandle.position, 'userData:', zHandle.userData);
+    
+    // Z-axis handle (blue) - depth movement (negative direction)
+    const zHandleNeg = this.createHandle('z-', new THREE.Vector3(center.x, center.y, center.z - size.z/2 - offsetDistance), 
+                                        new THREE.Vector3(handleSize, handleSize, handleLength), 0x6666ff);
+    this.dragHandles.add(zHandleNeg);
+    this.handleMeshes.set('z-', zHandleNeg);
+    console.log('Created Z- handle at position:', zHandleNeg.position, 'userData:', zHandleNeg.userData);
     
     // Z-axis rotation sphere (Blue) - positioned at end of Z handle
     const zRotSphere = this.createRotationSphere('z-rot', new THREE.Vector3(center.x, center.y, center.z + size.z/2 + offsetDistance + handleLength/2 + sphereSize/2), 
                                                 sphereSize, 0x0000ff);
     this.dragHandles.add(zRotSphere);
     this.handleMeshes.set('z-rot', zRotSphere);
+    console.log('Created Z rotation sphere at position:', zRotSphere.position, 'size:', sphereSize, 'userData:', zRotSphere.userData);
     
     this.scene.add(this.dragHandles);
     console.log('Added drag handles group to scene. Total children:', this.dragHandles.children.length);
@@ -839,120 +879,84 @@ export class Room3D {
     this.handleMeshes.clear();
   }
 
-  /**
-   * Start dragging a handle - OPTIMIZED FOR RESPONSIVENESS
-   */
-  private startHandleDrag(axis: string): void {
-    console.log('startHandleDrag called with axis:', axis);
-    this.isDraggingHandle = true;
-    this.activeHandle = axis;
-    this.isDragging = true;
-    this.frameCount = 0; // Reset frame counter for smooth updates
-    
-    // Store initial mouse position for delta calculation
-    this.lastMousePosition.set(this.mouse.x, this.mouse.y);
-    
-    // Disable orbit controls during handle drag
-    this.controls.enabled = false;
-    
-    // Change cursor to indicate dragging
-    this.renderer.domElement.style.cursor = 'grabbing';
-    
-    console.log('Handle drag started for axis:', axis, 'isDraggingHandle:', this.isDraggingHandle);
-  }
+
 
   /**
-   * Handle dragging with a specific axis handle - OPTIMIZED FOR SMOOTHNESS
+   * Handle dragging with a specific axis handle - ULTRA SMOOTH AND RESPONSIVE
    */
   private handleHandleDrag(): void {
     if (!this.selectedFurnitureId || !this.activeHandle) {
-      console.log('handleHandleDrag: Missing selectedFurnitureId or activeHandle', {
-        selectedFurnitureId: this.selectedFurnitureId,
-        activeHandle: this.activeHandle
-      });
       return;
     }
     
     const mesh = this.furnitureMeshes.get(this.selectedFurnitureId);
     if (!mesh) {
-      console.log('handleHandleDrag: No mesh found for furniture', this.selectedFurnitureId);
       return;
     }
     
-    // Calculate smooth mouse delta with improved precision and smoothing
+    // Calculate raw mouse delta with high precision
     const rawDelta = new THREE.Vector2(
       this.mouse.x - this.lastMousePosition.x,
       this.mouse.y - this.lastMousePosition.y
     );
     
-    // Apply smoothing factor for more fluid movement
-    const smoothingFactor = 0.6; // Reduced for smoother movement
-    const mouseDelta = new THREE.Vector2(
-      rawDelta.x * smoothingFactor,
-      rawDelta.y * smoothingFactor
-    );
-    
-    // Use a higher threshold to make movement more responsive
-    if (Math.abs(mouseDelta.x) < 0.01 && Math.abs(mouseDelta.y) < 0.01) {
-      return;
-    }
-    
-    // Increased movement scale for better responsiveness
-    const movementScale = 5.0; // Increased for better responsiveness
+    // Ultra-responsive movement with no smoothing delay
+    const movementScale = 8.0; // Increased for much better responsiveness
     const currentPosition = mesh.position.clone();
     let newPosition = currentPosition.clone();
     
-    // Apply smooth movement based on axis - use appropriate mouse delta for each axis
+    // Direct, immediate movement based on mouse direction
     switch (this.activeHandle) {
-      case 'x':
-        // X-axis: use horizontal mouse movement for smooth left/right movement
-        const xMovement = mouseDelta.x * movementScale;
-        newPosition.x += xMovement;
-        console.log(`X-axis: mouseDelta.x=${mouseDelta.x.toFixed(4)}, movement=${xMovement.toFixed(3)}, original X=${currentPosition.x.toFixed(3)}, new X=${newPosition.x.toFixed(3)}`);
+      case 'x+':
+        // X-axis positive: horizontal mouse movement = right movement
+        newPosition.x += rawDelta.x * movementScale;
         break;
-      case 'y':
-        // Y-axis: use vertical mouse movement for smooth up/down movement
-        const yMovement = mouseDelta.y * movementScale;
-        newPosition.y += yMovement;
-        console.log(`Y-axis: mouseDelta.y=${mouseDelta.y.toFixed(4)}, movement=${yMovement.toFixed(3)}, new Y=${newPosition.y.toFixed(3)}`);
+      case 'x-':
+        // X-axis negative: horizontal mouse movement = left movement  
+        newPosition.x -= rawDelta.x * movementScale;
         break;
-      case 'z':
-        // Z-axis: use horizontal mouse movement for smooth forward/back movement
-        const zMovement = mouseDelta.x * movementScale;
-        newPosition.z += zMovement;
-        console.log(`Z-axis: mouseDelta.x=${mouseDelta.x.toFixed(4)}, movement=${zMovement.toFixed(3)}, original Z=${currentPosition.z.toFixed(3)}, new Z=${newPosition.z.toFixed(3)}`);
+      case 'y+':
+        // Y-axis positive: vertical mouse movement = up movement
+        newPosition.y += rawDelta.y * movementScale;
+        break;
+      case 'y-':
+        // Y-axis negative: vertical mouse movement = down movement
+        newPosition.y -= rawDelta.y * movementScale;
+        break;
+      case 'z+':
+        // Z-axis positive: horizontal mouse movement = forward movement
+        newPosition.z += rawDelta.x * movementScale;
+        break;
+      case 'z-':
+        // Z-axis negative: horizontal mouse movement = backward movement
+        newPosition.z -= rawDelta.x * movementScale;
         break;
     }
     
     // Apply snap to grid if enabled (only for X and Z axes)
-    if (this.snapToGrid && this.activeHandle !== 'y') {
+    if (this.snapToGrid && !this.activeHandle.startsWith('y')) {
       newPosition = this.snapPositionToGrid(newPosition);
     }
     
-    // Apply smooth boundary constraints
+    // Apply boundary constraints
     const constrainedPosition = this.constrainToRoomBoundaries(newPosition, this.selectedFurnitureId);
     
-    // Update position smoothly
+    // Update position immediately for maximum responsiveness
     mesh.position.copy(constrainedPosition);
     
-    // Update visuals for smooth feedback
-    if (this.frameCount % 1 === 0) { // Update every frame for smoothness
-      this.updateSelectionVisuals();
-    }
+    // Update visuals every frame for smooth feedback
+    this.updateSelectionVisuals();
     
-    // Dispatch drag event for responsive updates
-    if (this.frameCount % 2 === 0) { // Update every other frame
-      this.container.dispatchEvent(new CustomEvent('furnitureDragged', {
-        detail: { 
-          furnitureId: this.selectedFurnitureId,
-          position: constrainedPosition
-        }
-      }));
-    }
+    // Dispatch drag event for real-time updates
+    this.container.dispatchEvent(new CustomEvent('furnitureDragged', {
+      detail: { 
+        furnitureId: this.selectedFurnitureId,
+        position: constrainedPosition
+      }
+    }));
     
     // Update last mouse position for next frame
     this.lastMousePosition.set(this.mouse.x, this.mouse.y);
-    this.frameCount++;
   }
 
   /**
@@ -1024,6 +1028,121 @@ export class Room3D {
     } else {
       this.renderer.domElement.style.cursor = 'default';
     }
+  }
+
+  /**
+   * Start dragging a handle for ultra-smooth movement
+   */
+  private startHandleDrag(axis: string): void {
+    this.isDraggingHandle = true;
+    this.activeHandle = axis;
+    this.isDragging = true;
+    
+    // Store initial mouse position for delta calculation
+    this.lastMousePosition.set(this.mouse.x, this.mouse.y);
+    
+    // Disable orbit controls during handle drag
+    this.controls.enabled = false;
+    
+    // Change cursor to indicate dragging
+    this.renderer.domElement.style.cursor = 'grabbing';
+  }
+
+  /**
+   * Move furniture along a specific axis by a fixed distance
+   */
+  private moveFurnitureAlongAxis(axis: string): void {
+    if (!this.selectedFurnitureId) return;
+    
+    const mesh = this.furnitureMeshes.get(this.selectedFurnitureId);
+    if (!mesh) return;
+    
+    // Move distance in feet (1 inch = 1/12 feet ≈ 0.083 feet)
+    const moveDistance = 0.083; // 1 inch
+    const newPosition = mesh.position.clone();
+    
+    // Determine direction based on which side of the handle was clicked
+    switch (axis) {
+      case 'x+':
+        newPosition.x += moveDistance;
+        break;
+      case 'x-':
+        newPosition.x -= moveDistance;
+        break;
+      case 'y+':
+        newPosition.y += moveDistance;
+        break;
+      case 'y-':
+        newPosition.y -= moveDistance;
+        break;
+      case 'z+':
+        newPosition.z += moveDistance;
+        break;
+      case 'z-':
+        newPosition.z -= moveDistance;
+        break;
+    }
+    
+    // Check if new position is valid (within room boundaries)
+    if (this.isPositionValid(newPosition, this.selectedFurnitureId)) {
+      mesh.position.copy(newPosition);
+      this.updateSelectionVisuals();
+      
+      // Update furniture position in state via app instance
+      if (this.appInstance && this.appInstance.updateFurniturePosition) {
+        this.appInstance.updateFurniturePosition(this.selectedFurnitureId, newPosition);
+      }
+      
+      console.log(`Moved furniture along ${axis} axis by 1 inch`);
+    } else {
+      console.log('Move would place furniture outside room boundaries - blocked');
+    }
+  }
+
+  /**
+   * Check if a position is valid (within room boundaries)
+   */
+  private isPositionValid(position: THREE.Vector3, furnitureId?: string): boolean {
+    if (!this.roomDimensions) return true;
+    
+    const halfWidth = this.roomDimensions.width / 2;
+    const halfLength = this.roomDimensions.length / 2;
+    const height = this.roomDimensions.height;
+    
+    // If no furniture ID provided, use simple room boundary check
+    if (!furnitureId) {
+      return position.x >= -halfWidth + 0.1 && 
+             position.x <= halfWidth - 0.1 &&
+             position.y >= 0.1 && 
+             position.y <= height - 0.1 &&
+             position.z >= -halfLength + 0.1 && 
+             position.z <= halfLength - 0.1;
+    }
+    
+    // Get furniture data for rotated bounding box calculation
+    const furniture = this.furniture.find(f => f.id === furnitureId);
+    if (!furniture) return true;
+    
+    const rotation = furniture.rotation || 0;
+    const cos = Math.abs(Math.cos(rotation));
+    const sin = Math.abs(Math.sin(rotation));
+    
+    // Calculate rotated bounding box dimensions
+    const rotatedWidth = furniture.width * cos + furniture.depth * sin;
+    const rotatedDepth = furniture.width * sin + furniture.depth * cos;
+    const rotatedHeight = furniture.height;
+    
+    const halfRotatedWidth = rotatedWidth / 2;
+    const halfRotatedHeight = rotatedHeight / 2;
+    const halfRotatedDepth = rotatedDepth / 2;
+    
+    // Check if position is within room boundaries accounting for rotated furniture
+    return position.x >= -halfWidth + halfRotatedWidth + 0.1 && 
+           position.x <= halfWidth - halfRotatedWidth - 0.1 &&
+           position.y >= halfRotatedHeight && 
+           position.y <= height - halfRotatedHeight - 0.1 &&
+           position.z >= -halfLength + halfRotatedDepth + 0.1 && 
+           position.z <= halfLength - halfRotatedDepth - 0.1;
   }
 
   /**
@@ -1109,6 +1228,19 @@ export class Room3D {
       return;
     }
 
+    // If in view mode, just dispatch selection event without creating handles
+    if (this.manipulationMode === 'view') {
+      console.log('Viewing furniture:', furnitureId);
+      this.selectedFurnitureId = furnitureId;
+      this.highlightFurniture(furnitureId, true);
+      
+      // Dispatch selection event for view mode
+      this.container.dispatchEvent(new CustomEvent('furnitureSelected', {
+        detail: { furnitureId, mode: 'view' }
+      }));
+      return;
+    }
+
     // Deselect previous selection
     if (this.selectedFurnitureId) {
       this.highlightFurniture(this.selectedFurnitureId, false);
@@ -1119,6 +1251,11 @@ export class Room3D {
     this.selectedFurnitureId = furnitureId;
     this.highlightFurniture(furnitureId, true);
     this.createSelectionVisuals(furnitureId);
+    
+    // Disable OrbitControls when furniture is selected in move/rotate/delete modes
+    if (this.manipulationMode === 'move' || this.manipulationMode === 'rotate' || this.manipulationMode === 'delete') {
+      this.controls.enabled = false;
+    }
     
     console.log('Selected furniture:', furnitureId);
     
@@ -1136,6 +1273,13 @@ export class Room3D {
       this.highlightFurniture(this.selectedFurnitureId, false);
       this.clearSelection();
       this.selectedFurnitureId = null;
+      
+      // Reset handle dragging state
+      this.isDraggingHandle = false;
+      this.activeHandle = null;
+      
+      // Re-enable OrbitControls when furniture is deselected
+      this.controls.enabled = (this.manipulationMode === 'none' || this.manipulationMode === 'view');
       
       // Dispatch deselection event
       this.container.dispatchEvent(new CustomEvent('furnitureDeselected', {
@@ -1164,7 +1308,7 @@ export class Room3D {
     if (!mesh || !this.roomDimensions) return false;
 
     // Check if position is within room boundaries
-    if (this.isPositionValid(newPosition, furnitureId)) {
+    if (this.isPositionValid(new THREE.Vector3(newPosition.x, newPosition.y, newPosition.z), furnitureId)) {
       mesh.position.set(newPosition.x, newPosition.y, newPosition.z);
       console.log(`Moved furniture ${furnitureId} to (${newPosition.x}, ${newPosition.y}, ${newPosition.z})`);
       return true;
@@ -1184,49 +1328,21 @@ export class Room3D {
     const rotationAmount = direction === 'clockwise' ? Math.PI / 4 : -Math.PI / 4;
     mesh.rotation.y += rotationAmount;
     
-    console.log(`Rotated furniture ${furnitureId} ${direction} by 45 degrees`);
+    // Update the furniture data to reflect the new rotation
+    const furniture = this.furniture.find(f => f.id === furnitureId);
+    if (furniture) {
+      // Convert current rotation from radians to degrees, add 45 degrees, then back to radians
+      const currentRotationDegrees = (mesh.rotation.y * 180) / Math.PI;
+      furniture.rotation = currentRotationDegrees;
+      
+      // Update the furniture data in the mesh userData as well
+      mesh.userData.furniture.rotation = currentRotationDegrees;
+    }
+    
+    console.log(`Rotated furniture ${furnitureId} ${direction} by 45 degrees. New rotation: ${furniture?.rotation}°`);
     return true;
   }
 
-  /**
-   * Check if a position is valid (within room boundaries)
-   */
-  private isPositionValid(position: { x: number; y: number; z: number }, furnitureId: string): boolean {
-    if (!this.roomDimensions) return false;
-
-    // Get furniture dimensions from the furniture data instead of geometry
-    const furniture = this.furniture.find(f => f.id === furnitureId);
-    if (!furniture) return false;
-
-    // Use actual furniture dimensions from the data
-    const furnitureWidth = furniture.width;
-    const furnitureHeight = furniture.height;
-    const furnitureDepth = furniture.depth;
-
-    const halfWidth = furnitureWidth / 2;
-    const halfHeight = furnitureHeight / 2;
-    const halfDepth = furnitureDepth / 2;
-
-    const roomHalfWidth = this.roomDimensions.width / 2;
-    const roomHalfLength = this.roomDimensions.length / 2;
-    const roomHeight = this.roomDimensions.height;
-
-    // Check boundaries with tolerance to allow objects closer to edges
-    const tolerance = 1.0; // Increased tolerance to 1.0 units
-    const withinX = (position.x - halfWidth >= -roomHalfWidth - tolerance) && (position.x + halfWidth <= roomHalfWidth + tolerance);
-    const withinY = (position.y - halfHeight >= -tolerance) && (position.y + halfHeight <= roomHeight + tolerance);
-    const withinZ = (position.z - halfDepth >= -roomHalfLength - tolerance) && (position.z + halfDepth <= roomHalfLength + tolerance);
-
-    console.log('Position validation:', {
-      position,
-      furnitureDimensions: { width: furnitureWidth, height: furnitureHeight, depth: furnitureDepth },
-      roomDimensions: this.roomDimensions,
-      withinX, withinY, withinZ,
-      tolerance
-    });
-
-    return withinX && withinY && withinZ;
-  }
 
   /**
    * Constrain position to room boundaries (allows movement but keeps within bounds)
@@ -1234,7 +1350,7 @@ export class Room3D {
   private constrainToRoomBoundaries(position: { x: number; y: number; z: number }, furnitureId: string): { x: number; y: number; z: number } {
     if (!this.roomDimensions) return position;
 
-    // Get furniture dimensions from the furniture data
+    // Get furniture dimensions and rotation from the furniture data
     const furniture = this.furniture.find(f => f.id === furnitureId);
     if (!furniture) {
       console.log(`Furniture not found for ID: ${furnitureId}`);
@@ -1244,36 +1360,54 @@ export class Room3D {
     const furnitureWidth = furniture.width;
     const furnitureHeight = furniture.height;
     const furnitureDepth = furniture.depth;
-
-    const halfWidth = furnitureWidth / 2;
-    const halfHeight = furnitureHeight / 2;
-    const halfDepth = furnitureDepth / 2;
+    const rotation = furniture.rotation || 0;
 
     const roomHalfWidth = this.roomDimensions.width / 2;
     const roomHalfLength = this.roomDimensions.length / 2;
     const roomHeight = this.roomDimensions.height;
 
-    // Constrain each axis to stay within room boundaries with tolerance
-    // Allow furniture to move closer to edges for better usability
-    const tolerance = 0.5; // Allow 0.5 units closer to edges
+    // Calculate rotated bounding box dimensions
+    // When furniture is rotated, we need to use the maximum extent in each axis
+    const cos = Math.abs(Math.cos(rotation));
+    const sin = Math.abs(Math.sin(rotation));
     
-    const constrainedX = Math.max(-roomHalfWidth + halfWidth - tolerance, Math.min(roomHalfWidth - halfWidth + tolerance, position.x));
-    const constrainedY = Math.max(halfHeight, Math.min(roomHeight - halfHeight + tolerance, position.y)); // Fix: ensure object stays above floor
-    const constrainedZ = Math.max(-roomHalfLength + halfDepth - tolerance, Math.min(roomHalfLength - halfDepth + tolerance, position.z));
+    // Calculate the rotated bounding box dimensions
+    const rotatedWidth = furnitureWidth * cos + furnitureDepth * sin;
+    const rotatedDepth = furnitureWidth * sin + furnitureDepth * cos;
+    const rotatedHeight = furnitureHeight; // Height doesn't change with Y rotation
+
+    const halfRotatedWidth = rotatedWidth / 2;
+    const halfRotatedHeight = rotatedHeight / 2;
+    const halfRotatedDepth = rotatedDepth / 2;
+
+    // Debug logging for boundary issues
+    console.log('Room boundaries with rotation:', {
+      roomDimensions: this.roomDimensions,
+      furnitureDimensions: { width: furnitureWidth, height: furnitureHeight, depth: furnitureDepth },
+      rotation: rotation * 180 / Math.PI,
+      rotatedDimensions: { width: rotatedWidth, height: rotatedHeight, depth: rotatedDepth },
+      originalPosition: position
+    });
+
+    // Constrain each axis using rotated bounding box
+    const tolerance = 0.1; // Minimal tolerance for edge clearance
     
-    // Debug X-axis constraints
-    if (this.activeHandle === 'x') {
-      console.log(`X-axis constraint: original=${position.x.toFixed(3)}, constrained=${constrainedX.toFixed(3)}`);
-      console.log(`X-axis bounds: min=${(-roomHalfWidth + halfWidth - tolerance).toFixed(3)}, max=${(roomHalfWidth - halfWidth + tolerance).toFixed(3)}`);
-      console.log(`Room half width: ${roomHalfWidth.toFixed(3)}, furniture half width: ${halfWidth.toFixed(3)}`);
-    }
+    const constrainedX = Math.max(-roomHalfWidth + halfRotatedWidth + tolerance, Math.min(roomHalfWidth - halfRotatedWidth - tolerance, position.x));
+    const constrainedY = Math.max(halfRotatedHeight, Math.min(roomHeight - halfRotatedHeight - tolerance, position.y));
+    const constrainedZ = Math.max(-roomHalfLength + halfRotatedDepth + tolerance, Math.min(roomHalfLength - halfRotatedDepth - tolerance, position.z));
     
-    // Debug Z-axis constraints
-    if (this.activeHandle === 'z') {
-      console.log(`Z-axis constraint: original=${position.z.toFixed(3)}, constrained=${constrainedZ.toFixed(3)}`);
-      console.log(`Z-axis bounds: min=${(-roomHalfLength + halfDepth - tolerance).toFixed(3)}, max=${(roomHalfLength - halfDepth + tolerance).toFixed(3)}`);
-      console.log(`Room half length: ${roomHalfLength.toFixed(3)}, furniture half depth: ${halfDepth.toFixed(3)}`);
-    }
+    console.log('Constrained position with rotation:', {
+      original: position,
+      constrained: { x: constrainedX, y: constrainedY, z: constrainedZ },
+      bounds: {
+        xMin: -roomHalfWidth + halfRotatedWidth + tolerance,
+        xMax: roomHalfWidth - halfRotatedWidth - tolerance,
+        yMin: halfRotatedHeight,
+        yMax: roomHeight - halfRotatedHeight - tolerance,
+        zMin: -roomHalfLength + halfRotatedDepth + tolerance,
+        zMax: roomHalfLength - halfRotatedDepth - tolerance
+      }
+    });
 
     return {
       x: constrainedX,
@@ -1306,13 +1440,14 @@ export class Room3D {
   }
 
   /**
-   * Get current furniture rotation
+   * Get current furniture rotation in degrees
    */
   getFurnitureRotation(furnitureId: string): number {
     const mesh = this.furnitureMeshes.get(furnitureId);
     if (!mesh) return 0;
 
-    return mesh.rotation.y;
+    // Convert from radians to degrees
+    return (mesh.rotation.y * 180) / Math.PI;
   }
 
   /**

@@ -12,6 +12,11 @@ export interface Furniture {
   color: number;
   price?: number;
   category: 'seating' | 'storage' | 'lighting' | 'decoration' | 'functional';
+  // Additional properties from AI suggestions
+  brand?: string;
+  productUrl?: string;
+  reasoning?: string;
+  description?: string;
 }
 
 export interface FurnitureTemplate {

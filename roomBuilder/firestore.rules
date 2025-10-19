@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Designs collection - allow read for public designs, write for authenticated users
+    match /designs/{designId} {
+      // Allow anyone to read public designs
+      allow read: if resource.data.isPublic == true;
+      
+      // Allow authenticated users to read their own designs (public or private)
+      allow read: if request.auth != null && request.auth.uid == resource.data.author.uid;
+      
+      // Allow authenticated users to create designs
+      allow create: if request.auth != null 
+        && request.auth.uid == request.resource.data.author.uid
+        && request.resource.data.keys().hasAll(['title', 'description', 'roomDimensions', 'furniture', 'author', 'createdAt', 'updatedAt', 'likes', 'views', 'isPublic']);
+      
+      // Allow authenticated users to update their own designs
+      allow update: if request.auth != null && request.auth.uid == resource.data.author.uid;
+      
+      // Allow authenticated users to delete their own designs
+      allow delete: if request.auth != null && request.auth.uid == resource.data.author.uid;
+    }
+    
+    // Comments collection - allow read for public designs, write for authenticated users
+    match /comments/{commentId} {
+      // Allow anyone to read comments on public designs
+      allow read: if get(/databases/$(database)/documents/designs/$(resource.data.designId)).data.isPublic == true;
+      
+      // Allow authenticated users to read comments on their own designs
+      allow read: if request.auth != null 
+        && get(/databases/$(database)/documents/designs/$(resource.data.designId)).data.author.uid == request.auth.uid;
+      
+      // Allow authenticated users to create comments
+      allow create: if request.auth != null 
+        && request.auth.uid == request.resource.data.author.uid
+        && request.resource.data.keys().hasAll(['designId', 'content', 'author', 'createdAt', 'likes']);
+      
+      // Allow authenticated users to update their own comments
+      allow update: if request.auth != null && request.auth.uid == resource.data.author.uid;
+      
+      // Allow authenticated users to delete their own comments
+      allow delete: if request.auth != null && request.auth.uid == resource.data.author.uid;
+    }
+    
+    // User profiles collection
+    match /profiles/{userId} {
+      // Allow users to read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow users to create their own profile
+      allow create: if request.auth != null 
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['displayName', 'email', 'photoURL', 'createdAt', 'updatedAt']);
+      
+      // Allow users to update their own profile
+      allow update: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

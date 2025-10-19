@@ -244,7 +244,12 @@ export class FurnitureManager {
       rotation: position.rotation,
       color: template.color,
       price: template.price,
-      category: template.category as any
+      category: template.category as any,
+      // Preserve additional properties from AI suggestions
+      brand: (template as any).brand,
+      productUrl: (template as any).productUrl,
+      reasoning: (template as any).reasoning,
+      description: (template as any).description
     };
     
     this.furniture.push(furniture);

@@ -8,6 +8,7 @@ import {PublishDialog} from './components/PublishDialog';
 import {AuthService} from './services/AuthService';
 import {UserProfile} from './components/UserProfile';
 import {LoginModal} from './components/LoginModal';
+import * as THREE from 'three';
 
 export class RoomBuilderApp {
   private room3D: Room3D | null = null;
@@ -29,6 +30,7 @@ export class RoomBuilderApp {
       furniture: [],
       selectedFurniture: null,
       isEditing: false,
+      isViewing: false,
       budget: 1000,
       roomType: 'living',
       isPublished: false
@@ -51,8 +53,10 @@ export class RoomBuilderApp {
       <div class="app-container">
         <div class="sidebar">
           <div id="user-profile"></div>
+          <div id="my-rooms"></div>
           <div id="room-management"></div>
           <div id="room-setup"></div>
+          <div id="furniture-search"></div>
           <div id="furniture-palette"></div>
           <div id="suggestions"></div>
           <div id="budget-tracker"></div>
@@ -67,12 +71,15 @@ export class RoomBuilderApp {
             <br><span class="handle-x">Red = X-axis</span> | <span class="handle-y">Green = Y-axis</span> | <span class="handle-z">Blue = Z-axis</span>
             <br><strong>Rotation:</strong> <span class="handle-x">Red sphere = X-rotation</span> | <span class="handle-y">Green sphere = Y-rotation</span> | <span class="handle-z">Blue sphere = Z-rotation</span>
           </div>
+          <div class="view-instructions hidden" id="view-instructions">
+            <strong>View Mode:</strong> Click on any furniture to view its details and specifications
+          </div>
           <div class="controls">
             <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
             <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
+            <button id="view-mode" class="btn-secondary" disabled>View Mode</button>
             <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
             <button id="reset-view" class="btn-secondary">Reset View</button>
-            <button id="toggle-bounding-boxes" class="btn-secondary">Show Bounding Boxes</button>
             <button id="publish-design" class="btn-primary">Publish Design</button>
             <button id="browse-designs" class="btn-secondary">
               <i class="icon-community"></i> Browse Community
@@ -127,13 +134,41 @@ export class RoomBuilderApp {
     `;
 
     this.setupUserProfile();
+    this.setupMyRooms();
     this.setupRoomManagement();
     this.setupRoomInput();
+    this.setupFurnitureSearch();
     this.setupFurniturePalette();
     this.setupBudgetTracker();
     this.setupEventListeners();
     this.setupAuthStateListener();
     this.updateAllButtonStates(); // Set initial button states
+  }
+
+  private setupMyRooms(): void {
+    const myRooms = document.getElementById('my-rooms')!;
+    myRooms.innerHTML = `
+      <div class="my-rooms-section">
+        <h3>My Rooms</h3>
+        <div class="rooms-list" id="rooms-list">
+          <p class="no-rooms-message">No saved rooms yet</p>
+        </div>
+        <div class="room-actions">
+          <button id="save-current-room" class="btn-secondary" disabled>Save Current Room</button>
+        </div>
+      </div>
+    `;
+
+    // Add event listener for save current room
+    document.getElementById('save-current-room')?.addEventListener('click', () => {
+      this.saveCurrentRoom();
+    });
+
+    // Load saved rooms
+    this.loadSavedRooms();
+    
+    // Sync published rooms from Firestore (if authenticated)
+    this.syncPublishedRooms();
   }
 
   private setupRoomManagement(): void {
@@ -195,6 +230,48 @@ export class RoomBuilderApp {
     
     document.getElementById('create-room')?.addEventListener('click', () => {
       this.handleCreateRoom();
+    });
+  }
+
+  private setupFurnitureSearch(): void {
+    const furnitureSearch = document.getElementById('furniture-search')!;
+    furnitureSearch.innerHTML = `
+      <div class="search-section">
+        <h3>Find Furniture</h3>
+        <div class="search-input-group">
+          <input type="text" id="furniture-search-input" placeholder="Search for furniture (e.g., 'sofa', 'dining table')" disabled>
+          <button id="search-furniture-btn" class="btn-secondary" disabled>
+            <i class="icon-search"></i> Search
+          </button>
+        </div>
+        <div class="search-results" id="search-results" style="display: none;">
+          <div class="search-results-header">
+            <h4>Search Results</h4>
+            <button id="clear-search" class="btn-small btn-secondary">Clear</button>
+          </div>
+          <div class="search-results-list" id="search-results-list">
+            <!-- Results will be populated here -->
+          </div>
+        </div>
+        <div class="search-info" id="search-info" style="display: none;">
+          <p class="search-match-info"></p>
+        </div>
+      </div>
+    `;
+
+    // Add event listeners
+    document.getElementById('search-furniture-btn')?.addEventListener('click', () => {
+      this.searchFurniture();
+    });
+
+    document.getElementById('furniture-search-input')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        this.searchFurniture();
+      }
+    });
+
+    document.getElementById('clear-search')?.addEventListener('click', () => {
+      this.clearSearch();
     });
   }
 
@@ -298,16 +375,16 @@ export class RoomBuilderApp {
       this.toggleEditMode();
     });
 
+    document.getElementById('view-mode')?.addEventListener('click', () => {
+      this.toggleViewMode();
+    });
+
     document.getElementById('delete-selected')?.addEventListener('click', () => {
       this.deleteSelectedFurniture();
     });
 
     document.getElementById('reset-view')?.addEventListener('click', () => {
       this.resetCameraView();
-    });
-
-    document.getElementById('toggle-bounding-boxes')?.addEventListener('click', () => {
-      this.toggleBoundingBoxes();
     });
 
     document.getElementById('publish-design')?.addEventListener('click', () => {
@@ -461,6 +538,9 @@ export class RoomBuilderApp {
       return;
     }
 
+    // Show loading state
+    this.showNotification('Loading furniture...', 'info');
+
     const position = {
       x: 0, // Center of room (room is centered at origin)
       y: template.dimensions.height / 2, // Half height above floor (floor is at Y=0)
@@ -476,6 +556,9 @@ export class RoomBuilderApp {
     this.updateBudgetDisplay();
     this.updateRoomManagementButtons();
     this.updateAllButtonStates();
+
+    // Show success notification
+    this.showNotification(`Added "${furniture.name}" to your room!`, 'success');
   }
 
   private updateBudgetDisplay(): void {
@@ -514,6 +597,24 @@ export class RoomBuilderApp {
       return;
     }
 
+    // Show loading state
+    const suggestionsDiv = document.getElementById('suggestions')!;
+    suggestionsDiv.innerHTML = `
+      <div class="suggestions-section">
+        <h3>AI Suggestions</h3>
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <p>Generating suggestions...</p>
+        </div>
+      </div>
+    `;
+
+    // Update button to show loading
+    const aiBtn = document.getElementById('get-suggestions') as HTMLButtonElement;
+    const originalText = aiBtn.textContent;
+    aiBtn.textContent = 'Generating...';
+    aiBtn.disabled = true;
+
     try {
       const isConnected = await this.decorationAI.testConnection();
       
@@ -533,7 +634,6 @@ export class RoomBuilderApp {
       this.showNotification('AI suggestions unavailable. Please check your API key and try again.', 'error');
       
       // Show empty suggestions section with error message
-      const suggestionsDiv = document.getElementById('suggestions')!;
       suggestionsDiv.innerHTML = `
         <div class="suggestions-section">
           <h3>AI Suggestions</h3>
@@ -543,6 +643,10 @@ export class RoomBuilderApp {
           </div>
         </div>
       `;
+    } finally {
+      // Reset button
+      aiBtn.textContent = originalText;
+      aiBtn.disabled = false;
     }
   }
 
@@ -610,6 +714,9 @@ export class RoomBuilderApp {
         });
         return;
       }
+
+      // Show loading state
+      this.showNotification('Loading furniture...', 'info');
 
       // Create furniture template from AI suggestion
       const furnitureTemplate = await this.decorationAI.createFurnitureFromSuggestion(suggestion);
@@ -694,7 +801,7 @@ export class RoomBuilderApp {
     });
   }
 
-  private showNotification(message: string, type: 'success' | 'error'): void {
+  private showNotification(message: string, type: 'success' | 'error' | 'info'): void {
     const notification = document.createElement('div');
     notification.className = `notification notification-${type}`;
     notification.textContent = message;
@@ -720,6 +827,19 @@ export class RoomBuilderApp {
     }
 
     this.proceedWithToggleEditMode();
+  }
+
+  private toggleViewMode(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with view mode
+        this.proceedWithToggleViewMode();
+      });
+      return;
+    }
+
+    this.proceedWithToggleViewMode();
   }
 
   private proceedWithToggleEditMode(): void {
@@ -792,6 +912,46 @@ export class RoomBuilderApp {
     }
   }
 
+  private proceedWithToggleViewMode(): void {
+    this.state.isViewing = !this.state.isViewing;
+    const viewButton = document.getElementById('view-mode') as HTMLButtonElement;
+    
+    if (this.state.isViewing) {
+      viewButton.textContent = 'Exit View';
+      viewButton.classList.add('active');
+      
+      // Set manipulation mode to view in Room3D
+      if (this.room3D) {
+        this.room3D.setManipulationMode('view');
+      }
+      
+      // Show view instructions
+      const viewInstructions = document.getElementById('view-instructions');
+      if (viewInstructions) {
+        viewInstructions.classList.remove('hidden');
+      }
+      
+      console.log('View mode enabled - click furniture to see details');
+    } else {
+      viewButton.textContent = 'View Mode';
+      viewButton.classList.remove('active');
+      this.state.selectedFurniture = null;
+      
+      // Hide view instructions
+      const viewInstructions = document.getElementById('view-instructions');
+      if (viewInstructions) {
+        viewInstructions.classList.add('hidden');
+      }
+      
+      // Reset manipulation mode
+      if (this.room3D) {
+        this.room3D.setManipulationMode('none');
+      }
+      
+      console.log('View mode disabled');
+    }
+  }
+
   private deleteSelectedFurniture(): void {
     // Check if user is authenticated
     if (!this.authService.isAuthenticated()) {
@@ -854,19 +1014,6 @@ export class RoomBuilderApp {
     this.room3D.resetView();
   }
 
-  private toggleBoundingBoxes(): void {
-    if (!this.room3D) {
-      alert('Please create a room first');
-      return;
-    }
-
-    const button = document.getElementById('toggle-bounding-boxes') as HTMLButtonElement;
-    const isCurrentlyVisible = button.textContent === 'Hide Bounding Boxes';
-    
-    this.room3D.toggleBoundingBoxes(!isCurrentlyVisible);
-    
-    button.textContent = isCurrentlyVisible ? 'Show Bounding Boxes' : 'Hide Bounding Boxes';
-  }
 
   private publishDesign(): void {
     if (!this.state.roomDimensions || this.state.furniture.length === 0) {
@@ -902,9 +1049,13 @@ export class RoomBuilderApp {
       thumbnail: thumbnail
     };
 
-    this.publishDialog.show(designData, (designId) => {
+    this.publishDialog.show(designData, () => {
       this.state.isPublished = true;
       this.updateRoomManagementButtons();
+      
+      // Also save to local "My Rooms" collection
+      this.saveCurrentRoomToLocal();
+      
       this.showGallery();
     });
   }
@@ -947,6 +1098,30 @@ export class RoomBuilderApp {
       this.loadDesignFromGallery(design);
     });
 
+    // Listen for view published design events
+    this.container.addEventListener('viewPublishedDesign', async (e: any) => {
+      const designId = e.detail.designId;
+      try {
+        // Import FirestoreService dynamically to avoid circular dependencies
+        const { FirestoreService } = await import('./services/FirestoreService');
+        const firestoreService = new FirestoreService();
+        
+        // Get the design data
+        const design = await firestoreService.getDesign(designId);
+        if (design) {
+          // Increment view count when viewing own published design
+          await firestoreService.incrementViews(designId);
+          console.log('App: View count incremented for published design:', designId);
+          
+          // Load the design
+          this.loadDesignFromGallery(design);
+        }
+      } catch (error) {
+        console.error('Error viewing published design:', error);
+        this.showNotification('Error loading your published design', 'error');
+      }
+    });
+
     // Listen for navigation events
     galleryContainer.addEventListener('navigateToBuilder', (e: any) => {
       const action = e.detail.action;
@@ -978,12 +1153,15 @@ export class RoomBuilderApp {
         <br><span class="handle-x">Red = X-axis</span> | <span class="handle-y">Green = Y-axis</span> | <span class="handle-z">Blue = Z-axis</span>
         <br><strong>Rotation:</strong> <span class="handle-x">Red sphere = X-rotation</span> | <span class="handle-y">Green sphere = Y-rotation</span> | <span class="handle-z">Blue sphere = Z-rotation</span>
       </div>
+      <div class="view-instructions hidden" id="view-instructions">
+        <strong>View Mode:</strong> Click on any furniture to view its details and specifications
+      </div>
       <div class="controls">
         <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
         <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
+        <button id="view-mode" class="btn-secondary" disabled>View Mode</button>
         <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
         <button id="reset-view" class="btn-secondary">Reset View</button>
-        <button id="toggle-bounding-boxes" class="btn-secondary">Show Bounding Boxes</button>
         <button id="publish-design" class="btn-primary">Publish Design</button>
         <button id="browse-designs" class="btn-secondary">
           <i class="icon-community"></i> Browse Community
@@ -1078,6 +1256,10 @@ export class RoomBuilderApp {
     this.state.roomType = design.roomType;
     this.state.isPublished = false;
 
+    // Save this design to "My Rooms" with the original title
+    const designTitle = design.title || `Community Design ${new Date().toLocaleDateString()}`;
+    this.saveRoomWithName(designTitle);
+
     // Update the UI
     this.updateBudgetDisplay();
     
@@ -1148,6 +1330,259 @@ export class RoomBuilderApp {
     }
   }
 
+  private saveCurrentRoom(): void {
+    if (!this.state.roomDimensions || this.state.furniture.length === 0) {
+      alert('Please create a room and add some furniture before saving.');
+      return;
+    }
+
+    const roomName = prompt('Enter a name for this room:');
+    if (!roomName) return;
+
+    this.saveRoomWithName(roomName);
+  }
+
+  private saveCurrentRoomToLocal(): void {
+    if (!this.state.roomDimensions || this.state.furniture.length === 0) {
+      return;
+    }
+
+    // Use a more descriptive name for published rooms
+    const roomName = `My Design ${new Date().toLocaleDateString()}`;
+    this.saveRoomWithName(roomName);
+  }
+
+  private saveRoomWithName(roomName: string): void {
+    const roomData = {
+      id: Date.now().toString(),
+      name: roomName,
+      roomDimensions: this.state.roomDimensions,
+      furniture: this.state.furniture,
+      budget: this.state.budget,
+      roomType: this.state.roomType,
+      savedAt: new Date().toISOString(),
+      isPublished: this.state.isPublished
+    };
+
+    // Get existing saved rooms
+    const savedRooms = this.getSavedRooms();
+    savedRooms.push(roomData);
+    
+    // Save to localStorage
+    localStorage.setItem('savedRooms', JSON.stringify(savedRooms));
+    
+    // Refresh the rooms list
+    this.loadSavedRooms();
+    
+    // Update save button state
+    this.updateSaveButtonState();
+    
+    if (!this.state.isPublished) {
+      this.showNotification(`Room "${roomName}" saved successfully!`, 'success');
+    }
+  }
+
+  private loadSavedRooms(): void {
+    const savedRooms = this.getSavedRooms();
+    const roomsList = document.getElementById('rooms-list');
+    
+    if (!roomsList) return;
+
+    if (savedRooms.length === 0) {
+      roomsList.innerHTML = '<p class="no-rooms-message">No saved rooms yet</p>';
+      return;
+    }
+
+    roomsList.innerHTML = savedRooms.map(room => `
+      <div class="saved-room-item" data-room-id="${room.id}">
+        <div class="room-info">
+          <h4>${room.name} ${room.isPublished ? '<span class="published-badge">Published</span>' : ''}</h4>
+          <p class="room-details">
+            ${room.roomDimensions.width}ft × ${room.roomDimensions.length}ft × ${room.roomDimensions.height}ft
+            <br>${room.furniture.length} furniture items
+            <br>Saved: ${new Date(room.savedAt).toLocaleDateString()}
+          </p>
+        </div>
+        <div class="room-actions">
+          <button class="btn-small btn-primary load-room-btn" data-room-id="${room.id}">Load</button>
+          <button class="btn-small btn-danger delete-room-btn" data-room-id="${room.id}">Delete</button>
+        </div>
+      </div>
+    `).join('');
+
+    // Add event listeners
+    roomsList.querySelectorAll('.load-room-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const roomId = (e.target as HTMLElement).dataset.roomId!;
+        this.loadSavedRoom(roomId);
+      });
+    });
+
+    roomsList.querySelectorAll('.delete-room-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const roomId = (e.target as HTMLElement).dataset.roomId!;
+        this.deleteSavedRoom(roomId);
+      });
+    });
+  }
+
+  private getSavedRooms(): any[] {
+    try {
+      const saved = localStorage.getItem('savedRooms');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('Error loading saved rooms:', error);
+      return [];
+    }
+  }
+
+  private loadSavedRoom(roomId: string): void {
+    const savedRooms = this.getSavedRooms();
+    const room = savedRooms.find(r => r.id === roomId);
+    
+    if (!room) {
+      alert('Room not found');
+      return;
+    }
+
+    // Load the room data
+    this.state.roomDimensions = room.roomDimensions;
+    this.state.furniture = room.furniture;
+    this.state.budget = room.budget;
+    this.state.roomType = room.roomType;
+    this.state.isPublished = false;
+
+    // Update the UI
+    this.updateBudgetDisplay();
+    
+    // Re-initialize 3D viewport
+    if (this.state.roomDimensions) {
+      try {
+        const viewport = document.getElementById('3d-viewport')!;
+        viewport.style.width = '100%';
+        viewport.style.height = 'calc(100vh - 70px)';
+        
+        setTimeout(() => {
+          this.room3D = new Room3D(viewport, this);
+          if (this.state.roomDimensions) {
+            this.room3D.createRoom(this.state.roomDimensions);
+          }
+          
+          this.state.furniture.forEach(furniture => {
+            if (this.room3D) {
+              this.room3D.addFurniture(furniture);
+            }
+          });
+          
+          this.updateRoomManagementButtons();
+          this.updateAllButtonStates();
+          this.updateSaveButtonState();
+        }, 100);
+        
+        this.showNotification(`Room "${room.name}" loaded successfully!`, 'success');
+      } catch (error) {
+        console.error('Error loading room:', error);
+        alert('Error loading room. Please try again.');
+      }
+    }
+  }
+
+  private deleteSavedRoom(roomId: string): void {
+    const savedRooms = this.getSavedRooms();
+    const room = savedRooms.find(r => r.id === roomId);
+    
+    if (!room) {
+      alert('Room not found');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete "${room.name}"?`)) {
+      const updatedRooms = savedRooms.filter(r => r.id !== roomId);
+      localStorage.setItem('savedRooms', JSON.stringify(updatedRooms));
+      this.loadSavedRooms();
+      this.showNotification(`Room "${room.name}" deleted`, 'success');
+    }
+  }
+
+  private updateSaveButtonState(): void {
+    const saveBtn = document.getElementById('save-current-room') as HTMLButtonElement;
+    if (saveBtn) {
+      const hasRoom = this.state.roomDimensions !== null;
+      const hasFurniture = this.state.furniture.length > 0;
+      const canSave = hasRoom && hasFurniture;
+      
+      saveBtn.disabled = !canSave;
+      saveBtn.title = canSave ? 'Save current room to your collection' : 'Create a room and add furniture first';
+    }
+  }
+
+  private async syncPublishedRooms(): Promise<void> {
+    if (!this.authService.isAuthenticated()) {
+      return;
+    }
+
+    try {
+      // Import FirestoreService dynamically to avoid circular dependencies
+      const { FirestoreService } = await import('./services/FirestoreService');
+      const firestoreService = new FirestoreService();
+      
+      // Get current user ID
+      const currentUser = this.authService.getCurrentUser();
+      if (!currentUser) {
+        return;
+      }
+      
+      // Get user's published designs
+      const publishedDesigns = await firestoreService.getUserDesigns(currentUser.uid, true);
+      
+      if (publishedDesigns.length === 0) {
+        return;
+      }
+
+      // Get existing saved rooms
+      const savedRooms = this.getSavedRooms();
+      const existingIds = new Set(savedRooms.map(room => room.firestoreId));
+      
+      // Add published designs that aren't already in local storage
+      let addedCount = 0;
+      for (const design of publishedDesigns) {
+        if (!existingIds.has(design.id)) {
+          // Handle Firestore timestamp
+          const createdAt = design.createdAt ? 
+            (design.createdAt as any).toDate ? (design.createdAt as any).toDate() : new Date(design.createdAt) : 
+            new Date();
+            
+          const roomData = {
+            id: `firestore_${design.id}`,
+            firestoreId: design.id,
+            name: design.title || `Published Room ${createdAt.toLocaleDateString()}`,
+            roomDimensions: design.roomDimensions,
+            furniture: design.furniture,
+            budget: design.budget,
+            roomType: design.roomType,
+            savedAt: createdAt.toISOString(),
+            isPublished: true
+          };
+          
+          savedRooms.push(roomData);
+          addedCount++;
+        }
+      }
+      
+      if (addedCount > 0) {
+        // Save updated rooms to localStorage
+        localStorage.setItem('savedRooms', JSON.stringify(savedRooms));
+        
+        // Refresh the rooms list
+        this.loadSavedRooms();
+        
+        console.log(`Synced ${addedCount} published rooms to My Rooms`);
+      }
+    } catch (error) {
+      console.error('Error syncing published rooms:', error);
+    }
+  }
+
   private updateAllButtonStates(): void {
     const isAuthenticated = this.authService.isAuthenticated();
     
@@ -1194,6 +1629,22 @@ export class RoomBuilderApp {
       }
     }
     
+    // Update view mode button
+    const viewBtn = document.getElementById('view-mode') as HTMLButtonElement;
+    if (viewBtn) {
+      const hasRoom = this.state.roomDimensions !== null;
+      const hasFurniture = this.state.furniture.length > 0;
+      const canView = isAuthenticated && hasRoom && hasFurniture;
+      
+      viewBtn.disabled = !canView;
+      viewBtn.title = canView ? 'View furniture details' : 'Create a room and add furniture first';
+      
+      if (!canView) {
+        viewBtn.textContent = 'View Mode';
+        viewBtn.classList.remove('active');
+      }
+    }
+    
     // Update room management buttons
     const clearBtn = document.getElementById('clear-room-btn') as HTMLButtonElement;
     const deleteBtn = document.getElementById('delete-room-btn') as HTMLButtonElement;
@@ -1209,6 +1660,179 @@ export class RoomBuilderApp {
       deleteBtn.title = 'Delete the current room and start over';
       deleteBtn.disabled = !isAuthenticated;
     }
+
+    // Update search functionality
+    this.updateSearchButtonStates();
+
+    // Update save button
+    this.updateSaveButtonState();
+  }
+
+  private updateSearchButtonStates(): void {
+    const isAuthenticated = this.authService.isAuthenticated();
+    const hasRoom = this.state.roomDimensions !== null;
+    
+    const searchInput = document.getElementById('furniture-search-input') as HTMLInputElement;
+    const searchBtn = document.getElementById('search-furniture-btn') as HTMLButtonElement;
+    
+    if (searchInput && searchBtn) {
+      const canSearch = isAuthenticated && hasRoom;
+      searchInput.disabled = !canSearch;
+      searchBtn.disabled = !canSearch;
+      
+      if (!canSearch) {
+        searchInput.placeholder = hasRoom ? 'Please sign in to search' : 'Create a room first to search';
+      } else {
+        searchInput.placeholder = 'Search for furniture (e.g., \'sofa\', \'dining table\')';
+      }
+    }
+  }
+
+  private searchFurniture(): void {
+    const searchInput = document.getElementById('furniture-search-input') as HTMLInputElement;
+    const query = searchInput.value.trim().toLowerCase();
+    
+    if (!query) {
+      this.showNotification('Please enter a search term', 'error');
+      return;
+    }
+
+    if (!this.state.roomDimensions) {
+      this.showNotification('Please create a room first', 'error');
+      return;
+    }
+
+    // Get all furniture templates
+    const allTemplates = this.furnitureManager.getTemplates();
+    
+    // Filter templates based on search query
+    const matchingTemplates = allTemplates.filter(template => {
+      const name = template.name.toLowerCase();
+      const type = template.type.toLowerCase();
+      const category = template.category.toLowerCase();
+      const description = template.description.toLowerCase();
+      
+      return name.includes(query) || 
+             type.includes(query) || 
+             category.includes(query) || 
+             description.includes(query);
+    });
+
+    if (matchingTemplates.length === 0) {
+      this.showSearchResults([], 'No furniture found matching your search.');
+      return;
+    }
+
+    // Sort by room size compatibility
+    const sortedTemplates = this.sortByRoomCompatibility(matchingTemplates);
+    
+    this.showSearchResults(sortedTemplates, `Found ${sortedTemplates.length} furniture items matching "${query}"`);
+  }
+
+  private sortByRoomCompatibility(templates: any[]): any[] {
+    if (!this.state.roomDimensions) return templates;
+
+    const roomArea = this.state.roomDimensions.width * this.state.roomDimensions.length;
+
+    return templates.sort((a, b) => {
+      const aArea = a.dimensions.width * a.dimensions.depth;
+      const bArea = b.dimensions.width * b.dimensions.depth;
+      
+      // Calculate compatibility score (lower is better)
+      const aScore = Math.abs(aArea - roomArea * 0.1); // 10% of room area
+      const bScore = Math.abs(bArea - roomArea * 0.1);
+      
+      return aScore - bScore;
+    });
+  }
+
+  private showSearchResults(templates: any[], message: string): void {
+    const resultsDiv = document.getElementById('search-results');
+    const resultsList = document.getElementById('search-results-list');
+    const searchInfo = document.getElementById('search-info');
+    const matchInfo = document.querySelector('.search-match-info');
+    
+    if (!resultsDiv || !resultsList || !searchInfo || !matchInfo) return;
+
+    // Show results section
+    resultsDiv.style.display = 'block';
+    searchInfo.style.display = 'block';
+    
+    // Update message
+    matchInfo.textContent = message;
+    
+    if (templates.length === 0) {
+      resultsList.innerHTML = '<p class="no-results">No furniture found matching your search criteria.</p>';
+      return;
+    }
+
+    // Generate results HTML
+    resultsList.innerHTML = templates.map(template => {
+      const compatibility = this.calculateCompatibility(template);
+      const compatibilityClass = compatibility > 0.8 ? 'excellent' : 
+                                 compatibility > 0.6 ? 'good' : 
+                                 compatibility > 0.4 ? 'fair' : 'poor';
+      
+      return `
+        <div class="search-result-item" data-template='${JSON.stringify(template)}'>
+          <div class="result-preview" style="background-color: #${template.color.toString(16).padStart(6, '0')}"></div>
+          <div class="result-info">
+            <h5>${template.name}</h5>
+            <p class="result-details">
+              ${template.dimensions.width}ft × ${template.dimensions.height}ft × ${template.dimensions.depth}ft
+              <br>$${template.price} • ${template.category}
+            </p>
+            <div class="compatibility-score">
+              <span class="compatibility-label">Room Fit:</span>
+              <span class="compatibility-value ${compatibilityClass}">
+                ${Math.round(compatibility * 100)}%
+              </span>
+            </div>
+          </div>
+          <div class="result-actions">
+            <button class="btn-small btn-primary add-from-search" data-template='${JSON.stringify(template)}'>
+              Add to Room
+            </button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Add event listeners for add buttons
+    resultsList.querySelectorAll('.add-from-search').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const template = JSON.parse((e.target as HTMLElement).dataset.template!);
+        this.addFurnitureToRoom(template);
+        this.showNotification(`Added "${template.name}" to your room!`, 'success');
+      });
+    });
+  }
+
+  private calculateCompatibility(template: any): number {
+    if (!this.state.roomDimensions) return 0;
+
+    const roomArea = this.state.roomDimensions.width * this.state.roomDimensions.length;
+    const roomVolume = roomArea * this.state.roomDimensions.height;
+    
+    const furnitureArea = template.dimensions.width * template.dimensions.depth;
+    const furnitureVolume = furnitureArea * template.dimensions.height;
+    
+    // Calculate how well the furniture fits in the room
+    const areaRatio = Math.min(furnitureArea / (roomArea * 0.1), 1); // 10% of room area is ideal
+    const volumeRatio = Math.min(furnitureVolume / (roomVolume * 0.05), 1); // 5% of room volume is ideal
+    
+    // Weight the scores (area is more important than volume)
+    return (areaRatio * 0.7 + volumeRatio * 0.3);
+  }
+
+  private clearSearch(): void {
+    const searchInput = document.getElementById('furniture-search-input') as HTMLInputElement;
+    const resultsDiv = document.getElementById('search-results');
+    const searchInfo = document.getElementById('search-info');
+    
+    if (searchInput) searchInput.value = '';
+    if (resultsDiv) resultsDiv.style.display = 'none';
+    if (searchInfo) searchInfo.style.display = 'none';
   }
 
 
@@ -1247,6 +1871,7 @@ export class RoomBuilderApp {
       furniture: [],
       selectedFurniture: null,
       isEditing: false,
+      isViewing: false,
       budget: 1000,
       roomType: 'living',
       isPublished: false
@@ -1403,6 +2028,8 @@ export class RoomBuilderApp {
     
     if (detail.mode === 'move' && this.state.selectedFurniture) {
       this.updatePositionInputs();
+    } else if (detail.mode === 'view' && this.state.selectedFurniture) {
+      this.showFurnitureDetails(this.state.selectedFurniture);
     }
   }
 
@@ -1511,6 +2138,120 @@ export class RoomBuilderApp {
     if (furniture) {
       furniture.rotation = rotation;
     }
+  }
+
+  /**
+   * Update furniture position in state (called from Room3D)
+   */
+  updateFurniturePosition(furnitureId: string, position: THREE.Vector3): void {
+    const furniture = this.state.furniture.find(f => f.id === furnitureId);
+    if (furniture) {
+      furniture.x = position.x;
+      furniture.y = position.y;
+      furniture.z = position.z;
+    }
+  }
+
+  /**
+   * Show furniture details modal
+   */
+  private showFurnitureDetails(furniture: any): void {
+    const modal = document.createElement('div');
+    modal.className = 'furniture-details-modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>${furniture.name}</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="furniture-info">
+            <p><strong>Type:</strong> ${furniture.type}</p>
+            <p><strong>Category:</strong> ${furniture.category}</p>
+            <p><strong>Price:</strong> $${furniture.price}</p>
+            <p><strong>Dimensions:</strong> ${furniture.width}ft × ${furniture.height}ft × ${furniture.depth}ft</p>
+            <p><strong>Position:</strong> X: ${furniture.x.toFixed(1)}, Y: ${furniture.y.toFixed(1)}, Z: ${furniture.z.toFixed(1)}</p>
+            <p><strong>Rotation:</strong> ${(furniture.rotation * 180 / Math.PI).toFixed(1)}°</p>
+            ${furniture.productUrl ? `
+              <p><strong>Product Link:</strong> <a href="${furniture.productUrl}" target="_blank" rel="noopener noreferrer">View Product →</a></p>
+            ` : ''}
+            ${furniture.brand ? `
+              <p><strong>Brand:</strong> ${furniture.brand}</p>
+            ` : ''}
+            ${furniture.reasoning ? `
+              <p><strong>Why this fits:</strong> ${furniture.reasoning}</p>
+            ` : ''}
+          </div>
+          <div class="furniture-actions">
+            <button class="btn-primary edit-furniture-btn">Edit This Item</button>
+            <button class="btn-danger delete-furniture-btn">Delete This Item</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('.close-modal')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.body.removeChild(modal);
+    });
+
+    modal.querySelector('.edit-furniture-btn')?.addEventListener('click', () => {
+      // Switch to edit mode and select this furniture
+      this.state.isViewing = false;
+      this.state.isEditing = true;
+      this.state.selectedFurniture = furniture;
+      
+      // Update UI
+      const viewBtn = document.getElementById('view-mode') as HTMLButtonElement;
+      const editBtn = document.getElementById('edit-mode') as HTMLButtonElement;
+      
+      if (viewBtn) {
+        viewBtn.textContent = 'View Mode';
+        viewBtn.classList.remove('active');
+      }
+      
+      if (editBtn) {
+        editBtn.textContent = 'Exit Edit';
+        editBtn.classList.add('active');
+      }
+      
+      // Set manipulation mode to move
+      if (this.room3D) {
+        this.room3D.setManipulationMode('move');
+      }
+      
+      document.body.removeChild(modal);
+    });
+
+    modal.querySelector('.delete-furniture-btn')?.addEventListener('click', () => {
+      if (confirm(`Are you sure you want to delete "${furniture.name}"?`)) {
+        // Delete the furniture
+        this.furnitureManager.removeFurniture(furniture.id);
+        
+        if (this.room3D) {
+          this.room3D.removeFurniture(furniture.id);
+        }
+        
+        this.state.furniture = this.state.furniture.filter(f => f.id !== furniture.id);
+        this.state.selectedFurniture = null;
+        
+        this.updateBudgetDisplay();
+        this.updateRoomManagementButtons();
+        this.updateAllButtonStates();
+        
+        document.body.removeChild(modal);
+      }
+    });
+
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
   }
 
 }

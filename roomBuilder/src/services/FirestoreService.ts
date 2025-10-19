@@ -30,6 +30,34 @@ export class FirestoreService {
     this.testConnection();
   }
 
+  /**
+   * Remove undefined values from an object recursively
+   */
+  private cleanUndefinedValues(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return null;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.cleanUndefinedValues(item)).filter(item => item !== null);
+    }
+    
+    if (typeof obj === 'object') {
+      const cleaned: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          const cleanedValue = this.cleanUndefinedValues(value);
+          if (cleanedValue !== null) {
+            cleaned[key] = cleanedValue;
+          }
+        }
+      }
+      return cleaned;
+    }
+    
+    return obj;
+  }
+
   private async testConnection(): Promise<void> {
     try {
       console.log('FirestoreService: Testing Firestore connection...');
@@ -82,13 +110,16 @@ export class FirestoreService {
     thumbnail?: string;
   }): Promise<string> {
     try {
-      const docRef = await addDoc(this.designsCollection, {
+      // Clean the data to remove undefined values
+      const cleanedDesignData = this.cleanUndefinedValues({
         ...designData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         likes: 0,
         views: 0
       });
+
+      const docRef = await addDoc(this.designsCollection, cleanedDesignData);
       
       console.log('Design saved with ID:', docRef.id);
       return docRef.id;
@@ -102,10 +133,12 @@ export class FirestoreService {
   async updateDesign(designId: string, updates: Partial<PublishedDesign>): Promise<void> {
     try {
       const designRef = doc(this.designsCollection, designId);
-      await updateDoc(designRef, {
+      const cleanedUpdates = this.cleanUndefinedValues({
         ...updates,
         updatedAt: serverTimestamp()
       });
+      
+      await updateDoc(designRef, cleanedUpdates);
       
       console.log('Design updated successfully');
     } catch (error) {
@@ -321,13 +354,59 @@ export class FirestoreService {
     }
   }
 
+  // Check if user has already liked a design
+  hasUserLikedDesign(designId: string, userId: string): boolean {
+    const likedDesigns = this.getLikedDesigns(userId);
+    return likedDesigns.includes(designId);
+  }
+
+  // Get list of designs liked by user
+  private getLikedDesigns(userId: string): string[] {
+    const key = `likedDesigns_${userId}`;
+    const liked = localStorage.getItem(key);
+    return liked ? JSON.parse(liked) : [];
+  }
+
+  // Add design to user's liked designs
+  private addLikedDesign(userId: string, designId: string): void {
+    const likedDesigns = this.getLikedDesigns(userId);
+    if (!likedDesigns.includes(designId)) {
+      likedDesigns.push(designId);
+      const key = `likedDesigns_${userId}`;
+      localStorage.setItem(key, JSON.stringify(likedDesigns));
+    }
+  }
+
+  // Remove design from user's liked designs
+  private removeLikedDesign(userId: string, designId: string): void {
+    const likedDesigns = this.getLikedDesigns(userId);
+    const index = likedDesigns.indexOf(designId);
+    if (index > -1) {
+      likedDesigns.splice(index, 1);
+      const key = `likedDesigns_${userId}`;
+      localStorage.setItem(key, JSON.stringify(likedDesigns));
+    }
+  }
+
   // Like a design
   async likeDesign(designId: string, userId?: string): Promise<void> {
+    if (!userId) {
+      throw new Error('User ID is required to like a design');
+    }
+
+    // Check if user has already liked this design
+    if (this.hasUserLikedDesign(designId, userId)) {
+      throw new Error('You have already liked this design');
+    }
+
     try {
       const designRef = doc(this.designsCollection, designId);
       await updateDoc(designRef, {
         likes: increment(1)
       });
+      
+      // Add to user's liked designs
+      this.addLikedDesign(userId, designId);
       
       console.log('Design liked successfully');
     } catch (error) {
@@ -336,13 +415,24 @@ export class FirestoreService {
     }
   }
 
-  // Increment view count
+  // Increment view count (with session-based deduplication)
   async incrementViews(designId: string): Promise<void> {
     try {
+      // Check if user has already viewed this design in this session
+      const viewedKey = `viewed_${designId}`;
+      if (sessionStorage.getItem(viewedKey)) {
+        console.log('View already counted for this session:', designId);
+        return;
+      }
+
       const designRef = doc(this.designsCollection, designId);
       await updateDoc(designRef, {
         views: increment(1)
       });
+
+      // Mark as viewed in this session
+      sessionStorage.setItem(viewedKey, 'true');
+      console.log('View count incremented for design:', designId);
     } catch (error) {
       console.error('Error incrementing views:', error);
       // Don't throw error for view counting failures
@@ -359,12 +449,14 @@ export class FirestoreService {
     content: string;
   }): Promise<string> {
     try {
-      const docRef = await addDoc(this.commentsCollection, {
+      const cleanedComment = this.cleanUndefinedValues({
         designId,
         ...comment,
         createdAt: serverTimestamp(),
         likes: 0
       });
+      
+      const docRef = await addDoc(this.commentsCollection, cleanedComment);
       
       console.log('Comment added with ID:', docRef.id);
       return docRef.id;
@@ -406,10 +498,12 @@ export class FirestoreService {
   async updateUserProfile(userId: string, profileData: Partial<UserProfile>): Promise<void> {
     try {
       const profileRef = doc(this.profilesCollection, userId);
-      await updateDoc(profileRef, {
+      const cleanedProfileData = this.cleanUndefinedValues({
         ...profileData,
         updatedAt: serverTimestamp()
       });
+      
+      await updateDoc(profileRef, cleanedProfileData);
       
       console.log('User profile updated successfully');
     } catch (error) {

@@ -3,6 +3,7 @@ export interface AppState {
   furniture: Furniture[];
   selectedFurniture: Furniture | null;
   isEditing: boolean;
+  isViewing: boolean;
   budget: number;
   roomType: string;
   isPublished: boolean;
@@ -14,6 +15,14 @@ export interface DecorationSuggestion {
   estimatedCost: number;
   category: string;
   priority: 'high' | 'medium' | 'low';
+  dimensions?: {
+    width: number;
+    height: number;
+    depth: number;
+  };
+  brand?: string;
+  productUrl?: string;
+  reasoning?: string;
 }
 
 import type {RoomDimensions} from './Room';

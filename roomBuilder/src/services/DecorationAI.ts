@@ -114,12 +114,10 @@ export class DecorationAI {
 
   private createPrompt(
     roomDimensions: RoomDimensions,
-    existingFurniture: Furniture[],
+    _existingFurniture: Furniture[],
     roomType: string,
     budget: number
   ): string {
-    const furnitureList = existingFurniture.map(f => `${f.name} (${f.type})`).join(', ');
-    
     return `You are an expert interior designer. Suggest 5 specific furniture items for a ${roomType} room with these exact dimensions: ${roomDimensions.width}ft wide × ${roomDimensions.length}ft long × ${roomDimensions.height}ft high. Budget: $${budget}.
 
 Consider the room proportions:
@@ -219,7 +217,9 @@ Focus on real, purchasable items that fit the room dimensions and budget. Consid
         price: suggestion.estimatedCost,
         category: suggestion.category,
         description: suggestion.description,
-        brand: furnitureSpec.brand,
+        brand: furnitureSpec.brand || suggestion.brand,
+        productUrl: suggestion.productUrl,
+        reasoning: suggestion.reasoning,
         source: furnitureSpec.source,
         imageUrl: furnitureSpec.imageUrl
       };

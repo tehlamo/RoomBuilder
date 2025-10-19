@@ -175,6 +175,11 @@ export class DesignGallery {
       console.error('DesignGallery: designs-grid element not found!');
       return;
     }
+
+    // Check if user has already liked this design
+    const currentUser = this.authService?.getCurrentUser();
+    const isLiked = currentUser ? this.firestoreService.hasUserLikedDesign(design.id, currentUser.uid) : false;
+    
     const card = document.createElement('div');
     card.className = 'design-card';
     card.innerHTML = `
@@ -189,14 +194,14 @@ export class DesignGallery {
           <span class="design-budget">$${design.budget}</span>
         </div>
         <div class="design-stats">
-          <span class="stat">
-            <i class="icon-heart"></i> ${design.likes}
+          <span class="stat" title="Number of likes">
+            <i class="icon-heart"></i> ${design.likes} likes
           </span>
-          <span class="stat">
-            <i class="icon-eye"></i> ${design.views}
+          <span class="stat" title="Number of views">
+            <i class="icon-eye"></i> ${design.views} views
           </span>
-          <span class="stat">
-            <i class="icon-furniture"></i> ${design.furniture.length}
+          <span class="stat" title="Number of furniture items">
+            <i class="icon-furniture"></i> ${design.furniture.length} items
           </span>
         </div>
         <div class="design-author">
@@ -205,8 +210,8 @@ export class DesignGallery {
         </div>
         <div class="design-actions">
           <button class="btn-secondary view-design-btn" data-design-id="${design.id}">Load Design</button>
-          <button class="btn-primary like-design-btn" data-design-id="${design.id}">
-            <i class="icon-heart"></i> Like
+          <button class="btn-primary like-design-btn ${isLiked ? 'liked' : ''}" data-design-id="${design.id}" ${isLiked ? 'disabled' : ''}>
+            <i class="icon-heart"></i> ${isLiked ? 'Liked!' : 'Like'}
           </button>
         </div>
       </div>
@@ -313,6 +318,10 @@ export class DesignGallery {
       
       console.log('DesignGallery: Design found:', design.title);
       
+      // Increment view count when someone loads a design
+      await this.firestoreService.incrementViews(designId);
+      console.log('DesignGallery: View count incremented for design:', designId);
+      
       // Emit event to load design in builder
       this.container.dispatchEvent(new CustomEvent('designSelected', {
         detail: { design }
@@ -331,13 +340,29 @@ export class DesignGallery {
       return;
     }
 
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser) {
+      this.showError('User not found. Please sign in again.');
+      return;
+    }
+
+    // Check if user has already liked this design
+    if (this.firestoreService.hasUserLikedDesign(designId, currentUser.uid)) {
+      this.showError('You have already liked this design.');
+      return;
+    }
+
     try {
-      const currentUser = this.authService.getCurrentUser();
-      await this.firestoreService.likeDesign(designId, currentUser?.uid);
+      await this.firestoreService.likeDesign(designId, currentUser.uid);
+      
+      // Also increment view count when someone likes a design (engagement)
+      await this.firestoreService.incrementViews(designId);
+      console.log('DesignGallery: View count incremented for liked design:', designId);
       
       // Update UI
       button.innerHTML = '<i class="icon-heart"></i> Liked!';
       button.classList.add('liked');
+      button.disabled = true; // Disable the button to prevent multiple clicks
       
       // Update the like count in the card
       const card = button.closest('.design-card');
@@ -350,6 +375,8 @@ export class DesignGallery {
       console.error('Error liking design:', error);
       if (error.message && error.message.includes('permission')) {
         this.showError('Please sign in to like designs.');
+      } else if (error.message && error.message.includes('already liked')) {
+        this.showError('You have already liked this design.');
       } else {
         this.showError('Failed to like design. Please try again.');
       }
