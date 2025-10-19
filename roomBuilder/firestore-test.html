@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firestore Test</title>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-firestore.js"></script>
+</head>
+<body>
+    <h1>Firestore Connection Test</h1>
+    <div id="status">Testing...</div>
+    <button onclick="testConnection()">Test Connection</button>
+    <button onclick="createTestDesign()">Create Test Design</button>
+    <button onclick="getDesigns()">Get Designs</button>
+    <div id="results"></div>
+
+    <script>
+        // Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyCvu8YJ6yQh5bXeDaoyGgo3LYiFgw8x-tA",
+            authDomain: "roombuilder-4ffd9.firebaseapp.com",
+            projectId: "roombuilder-4ffd9",
+            storageBucket: "roombuilder-4ffd9.firebasestorage.app",
+            messagingSenderId: "319855638873",
+            appId: "1:319855638873:web:495b5457b1750911d6f448",
+            measurementId: "G-Q0DWR8K1ZC"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        async function testConnection() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            try {
+                status.textContent = 'Testing connection...';
+                
+                // Test basic connection
+                const testQuery = db.collection('designs').limit(1);
+                const testSnapshot = await testQuery.get();
+                
+                status.textContent = `Connection successful! Found ${testSnapshot.size} documents`;
+                results.innerHTML = `<p>Connection test passed. Collection size: ${testSnapshot.size}</p>`;
+                
+            } catch (error) {
+                status.textContent = 'Connection failed!';
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('Connection error:', error);
+            }
+        }
+
+        async function createTestDesign() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            try {
+                status.textContent = 'Creating test design...';
+                
+                const testDesign = {
+                    title: 'Test Design from HTML',
+                    description: 'This is a test design created from HTML',
+                    roomDimensions: { width: 10, length: 12, height: 9 },
+                    furniture: [],
+                    budget: 1000,
+                    roomType: 'living',
+                    tags: ['test', 'html'],
+                    isPublic: true,
+                    author: {
+                        uid: 'test-user-html',
+                        displayName: 'Test User HTML',
+                        photoURL: null
+                    },
+                    createdAt: firebase.firestore.Timestamp.now(),
+                    updatedAt: firebase.firestore.Timestamp.now(),
+                    likes: 0,
+                    views: 0
+                };
+
+                const docRef = await db.collection('designs').add(testDesign);
+                
+                status.textContent = 'Test design created!';
+                results.innerHTML = `<p style="color: green;">Test design created with ID: ${docRef.id}</p>`;
+                
+            } catch (error) {
+                status.textContent = 'Failed to create test design!';
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('Create error:', error);
+            }
+        }
+
+        async function getDesigns() {
+            const status = document.getElementById('status');
+            const results = document.getElementById('results');
+            
+            try {
+                status.textContent = 'Getting designs...';
+                
+                // Test public designs query
+                const publicQuery = db.collection('designs').where('isPublic', '==', true).limit(10);
+                const publicSnapshot = await publicQuery.get();
+                
+                status.textContent = `Found ${publicSnapshot.size} public designs`;
+                
+                let html = `<h3>Public Designs (${publicSnapshot.size}):</h3>`;
+                publicSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    html += `<div style="border: 1px solid #ccc; margin: 10px; padding: 10px;">
+                        <strong>${data.title}</strong><br>
+                        ID: ${doc.id}<br>
+                        Author: ${data.author?.displayName || 'Unknown'}<br>
+                        Public: ${data.isPublic}<br>
+                        Created: ${data.createdAt?.toDate?.() || 'Unknown'}
+                    </div>`;
+                });
+                
+                results.innerHTML = html;
+                
+            } catch (error) {
+                status.textContent = 'Failed to get designs!';
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('Get designs error:', error);
+            }
+        }
+
+        // Auto-test on load
+        window.onload = () => {
+            testConnection();
+        };
+    </script>
+</body>
+</html>

@@ -90,7 +90,9 @@ export class Room3D {
       this.scene.add(ceiling);
 
       const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
-      this.camera.position.set(maxDimension * 1.5, maxDimension * 0.8, maxDimension * 1.5);
+      // Limit camera distance to prevent extreme zoom out
+      const cameraDistance = Math.min(maxDimension * 1.5, 50);
+      this.camera.position.set(cameraDistance, maxDimension * 0.8, cameraDistance);
       this.camera.lookAt(0, 0, 0);
       
       // Force a resize to ensure proper dimensions after room creation
@@ -246,6 +248,21 @@ export class Room3D {
         material.emissive.setHex(0x000000); // Remove glow
         material.opacity = 1.0;
       }
+    }
+  }
+
+  // Method to capture the 3D scene as a thumbnail
+  captureThumbnail(): string {
+    try {
+      // Render the scene
+      this.renderer.render(this.scene, this.camera);
+      
+      // Capture the canvas as a data URL
+      const canvas = this.renderer.domElement;
+      return canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('Error capturing thumbnail:', error);
+      return '';
     }
   }
 }

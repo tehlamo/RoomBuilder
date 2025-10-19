@@ -22,6 +22,7 @@ export class PublishDialog {
       furniture: Furniture[];
       budget: number;
       roomType: string;
+      thumbnail?: string;
     },
     onPublish?: (designId: string) => void
   ): void {
@@ -34,6 +35,7 @@ export class PublishDialog {
     furniture: Furniture[];
     budget: number;
     roomType: string;
+    thumbnail?: string;
   }): void {
     // Remove any existing dialog overlays first
     const existingOverlays = this.container.querySelectorAll('.publish-dialog-overlay');
@@ -189,7 +191,8 @@ export class PublishDialog {
         roomType: designData.roomType,
         author: userData,
         isPublic,
-        tags
+        tags,
+        thumbnail: designData.thumbnail
       });
 
       // Success!

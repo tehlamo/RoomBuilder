@@ -19,16 +19,33 @@ export class DesignGallery {
   }
 
   async initialize(): Promise<void> {
+    console.log('Initializing DesignGallery...');
     this.renderGallery();
-    await this.loadDesigns();
     this.setupEventListeners();
+    await this.loadDesigns(true); // Reset on initial load
+    console.log('DesignGallery initialization complete');
   }
 
   private renderGallery(): void {
     this.container.innerHTML = `
       <div class="gallery-container">
         <div class="gallery-header">
-          <h2>Community Designs</h2>
+          <div class="gallery-title-section">
+            <h2>Community Designs</h2>
+            <div class="gallery-actions">
+              <button id="create-new-room" class="btn-primary">
+                <i class="icon-plus"></i> Create New Room
+              </button>
+              <button id="back-to-builder" class="btn-secondary">
+                <i class="icon-arrow-left"></i> Back to Builder
+              </button>
+            </div>
+          </div>
+          <div class="debug-actions" style="margin-bottom: 15px;">
+            <button id="create-test-design" class="btn-secondary" style="font-size: 12px; padding: 5px 10px;">
+              Create Test Design
+            </button>
+          </div>
           <div class="gallery-filters">
             <select id="room-type-filter" class="filter-select">
               <option value="">All Room Types</option>
@@ -66,20 +83,31 @@ export class DesignGallery {
   }
 
   private async loadDesigns(reset: boolean = true): Promise<void> {
+    console.log('DesignGallery: loadDesigns called with reset:', reset);
+    
     if (reset) {
       this.lastDoc = null;
       this.hasMore = true;
       document.getElementById('designs-grid')!.innerHTML = '';
+      console.log('DesignGallery: Reset state, cleared grid');
     }
 
-    if (!this.hasMore) return;
+    if (!this.hasMore) {
+      console.log('DesignGallery: No more designs to load, returning');
+      return;
+    }
 
     try {
       document.getElementById('loading-indicator')!.style.display = 'block';
       document.getElementById('load-more-btn')!.style.display = 'none';
 
       const filters = { ...this.currentFilters, lastDoc: this.lastDoc };
+      console.log('Loading designs with filters:', filters);
+      
       const result = await this.firestoreService.getPublicDesigns(filters);
+      console.log('DesignGallery: Firestore result:', result);
+      console.log('DesignGallery: Number of designs loaded:', result.designs.length);
+      console.log('DesignGallery: Has more:', result.hasMore);
 
       this.lastDoc = result.lastDoc;
       this.hasMore = result.hasMore;
@@ -88,9 +116,19 @@ export class DesignGallery {
         document.getElementById('designs-grid')!.innerHTML = '';
       }
 
-      result.designs.forEach(design => {
-        this.addDesignCard(design);
-      });
+      if (result.designs.length === 0) {
+        console.log('DesignGallery: No designs found, showing no designs message');
+        // Only show no designs message if this is a reset (first load)
+        if (reset) {
+          this.showNoDesignsMessage();
+        }
+      } else {
+        console.log('DesignGallery: Found designs, adding cards:', result.designs.length);
+        result.designs.forEach(design => {
+          console.log('DesignGallery: Adding design card for:', design.title);
+          this.addDesignCard(design);
+        });
+      }
 
       if (this.hasMore) {
         document.getElementById('load-more-btn')!.style.display = 'block';
@@ -105,7 +143,12 @@ export class DesignGallery {
   }
 
   private addDesignCard(design: PublishedDesign): void {
+    console.log('DesignGallery: addDesignCard called for:', design.title);
     const grid = document.getElementById('designs-grid')!;
+    if (!grid) {
+      console.error('DesignGallery: designs-grid element not found!');
+      return;
+    }
     const card = document.createElement('div');
     card.className = 'design-card';
     card.innerHTML = `
@@ -135,7 +178,7 @@ export class DesignGallery {
           <span class="author-name">${design.author.displayName}</span>
         </div>
         <div class="design-actions">
-          <button class="btn-secondary view-design-btn" data-design-id="${design.id}">View Design</button>
+          <button class="btn-secondary view-design-btn" data-design-id="${design.id}">Load Design</button>
           <button class="btn-primary like-design-btn" data-design-id="${design.id}">
             <i class="icon-heart"></i> Like
           </button>
@@ -144,6 +187,7 @@ export class DesignGallery {
     `;
 
     grid.appendChild(card);
+    console.log('DesignGallery: Card added to grid, total cards:', grid.children.length);
   }
 
   private setupEventListeners(): void {
@@ -179,12 +223,38 @@ export class DesignGallery {
       this.loadDesigns(false);
     });
 
+    // Test design button
+    document.getElementById('create-test-design')?.addEventListener('click', async () => {
+      try {
+        await this.firestoreService.createTestDesign();
+        console.log('Test design created, reloading gallery...');
+        await this.loadDesigns(true);
+      } catch (error) {
+        console.error('Error creating test design:', error);
+      }
+    });
+
+    // Navigation buttons
+    document.getElementById('create-new-room')?.addEventListener('click', () => {
+      this.container.dispatchEvent(new CustomEvent('navigateToBuilder', {
+        detail: { action: 'createNewRoom' }
+      }));
+    });
+
+    document.getElementById('back-to-builder')?.addEventListener('click', () => {
+      this.container.dispatchEvent(new CustomEvent('navigateToBuilder', {
+        detail: { action: 'backToBuilder' }
+      }));
+    });
+
     // Design card interactions
     document.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
+      console.log('DesignGallery: Click event on:', target.className, target.tagName);
       
       if (target.classList.contains('view-design-btn')) {
         const designId = target.getAttribute('data-design-id');
+        console.log('DesignGallery: View design button clicked, designId:', designId);
         if (designId) {
           this.viewDesign(designId);
         }
@@ -201,17 +271,20 @@ export class DesignGallery {
 
   private async viewDesign(designId: string): Promise<void> {
     try {
-      // Create design viewer and load the design
-      const designViewer = new DesignViewer(this.container);
-      await designViewer.loadDesign(designId);
+      console.log('DesignGallery: Viewing design with ID:', designId);
       
-      // Listen for events from the design viewer
-      this.container.addEventListener('loadDesignInBuilder', (e: any) => {
-        const design = e.detail.design;
-        this.container.dispatchEvent(new CustomEvent('designSelected', {
-          detail: { design }
-        }));
-      });
+      // Get the design data first
+      const design = await this.firestoreService.getDesign(designId);
+      if (!design) {
+        throw new Error('Design not found');
+      }
+      
+      console.log('DesignGallery: Design found:', design.title);
+      
+      // Emit event to load design in builder
+      this.container.dispatchEvent(new CustomEvent('designSelected', {
+        detail: { design }
+      }));
       
     } catch (error) {
       console.error('Error viewing design:', error);
@@ -236,7 +309,11 @@ export class DesignGallery {
       }
     } catch (error) {
       console.error('Error liking design:', error);
-      this.showError('Failed to like design. Please try again.');
+      if (error.message && error.message.includes('permission')) {
+        this.showError('Please sign in to like designs.');
+      } else {
+        this.showError('Failed to like design. Please try again.');
+      }
     }
   }
 
@@ -260,6 +337,29 @@ export class DesignGallery {
     setTimeout(() => {
       errorDiv.remove();
     }, 5000);
+  }
+
+  private showNoDesignsMessage(): void {
+    // Remove any existing no designs message
+    const existingMessage = document.querySelector('.no-designs-message');
+    if (existingMessage) {
+      existingMessage.remove();
+    }
+    
+    const noDesignsDiv = document.createElement('div');
+    noDesignsDiv.className = 'no-designs-message';
+    noDesignsDiv.innerHTML = `
+      <div style="text-align: center; padding: 40px 20px; color: #666;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🏠</div>
+        <h3 style="margin: 0 0 8px 0; color: #333;">No designs found</h3>
+        <p style="margin: 0; color: #666;">Be the first to publish a design to the community!</p>
+      </div>
+    `;
+    
+    const grid = document.getElementById('designs-grid');
+    if (grid) {
+      grid.appendChild(noDesignsDiv);
+    }
   }
 
   // Public method to refresh the gallery

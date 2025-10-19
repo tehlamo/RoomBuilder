@@ -25,6 +25,45 @@ export class FirestoreService {
   private commentsCollection = collection(db, 'comments');
   private profilesCollection = collection(db, 'profiles');
 
+  constructor() {
+    // Test Firestore connection
+    this.testConnection();
+  }
+
+  private async testConnection(): Promise<void> {
+    try {
+      console.log('FirestoreService: Testing Firestore connection...');
+      
+      // Test basic connection
+      const testQuery = query(this.designsCollection, limit(1));
+      const testSnapshot = await getDocs(testQuery);
+      console.log('FirestoreService: Connection successful. Collection size:', testSnapshot.size);
+      
+      // Test public designs query specifically
+      const publicQuery = query(this.designsCollection, where('isPublic', '==', true), limit(5));
+      const publicSnapshot = await getDocs(publicQuery);
+      console.log('FirestoreService: Public designs found:', publicSnapshot.size);
+      
+      // Log all documents in the collection (for debugging)
+      const allQuery = query(this.designsCollection, limit(10));
+      const allSnapshot = await getDocs(allQuery);
+      console.log('FirestoreService: All designs in collection:', allSnapshot.size);
+      
+      allSnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('FirestoreService: Document:', doc.id, {
+          title: data.title,
+          isPublic: data.isPublic,
+          author: data.author?.displayName
+        });
+      });
+      
+    } catch (error) {
+      console.error('FirestoreService: Connection failed:', error);
+      console.error('FirestoreService: Error details:', error);
+    }
+  }
+
   // Save a design to Firestore
   async saveDesign(designData: {
     title: string;
@@ -119,6 +158,7 @@ export class FirestoreService {
     hasMore: boolean;
   }> {
     try {
+      console.log('FirestoreService: Getting public designs with filters:', filters);
       let q = query(
         this.designsCollection,
         where('isPublic', '==', true)
@@ -142,19 +182,29 @@ export class FirestoreService {
       }
 
       // Apply sorting
-      switch (filters.sortBy) {
-        case 'newest':
-          q = query(q, orderBy('createdAt', 'desc'));
-          break;
-        case 'popular':
-          q = query(q, orderBy('likes', 'desc'), orderBy('createdAt', 'desc'));
-          break;
-        case 'likes':
-          q = query(q, orderBy('likes', 'desc'));
-          break;
-        case 'views':
-          q = query(q, orderBy('views', 'desc'));
-          break;
+      try {
+        switch (filters.sortBy) {
+          case 'newest':
+            q = query(q, orderBy('createdAt', 'desc'));
+            break;
+          case 'popular':
+            q = query(q, orderBy('likes', 'desc'), orderBy('createdAt', 'desc'));
+            break;
+          case 'likes':
+            q = query(q, orderBy('likes', 'desc'));
+            break;
+          case 'views':
+            q = query(q, orderBy('views', 'desc'));
+            break;
+          default:
+            // Default to newest if sortBy is not recognized
+            q = query(q, orderBy('createdAt', 'desc'));
+            break;
+        }
+      } catch (sortError) {
+        console.warn('FirestoreService: Error applying sort, using default:', sortError);
+        // Fallback to default sorting
+        q = query(q, orderBy('createdAt', 'desc'));
       }
 
       // Apply pagination
@@ -167,18 +217,33 @@ export class FirestoreService {
       const querySnapshot = await getDocs(q);
       const designs: PublishedDesign[] = [];
       
+      console.log('FirestoreService: Query snapshot size:', querySnapshot.size);
+      
       querySnapshot.forEach((doc) => {
-        const data = doc.data() as Omit<PublishedDesign, 'id'>;
-        designs.push({
-          id: doc.id,
-          ...data,
-          createdAt: data.createdAt || Date.now(),
-          updatedAt: data.updatedAt || Date.now()
-        });
+        try {
+          const data = doc.data() as Omit<PublishedDesign, 'id'>;
+          console.log('FirestoreService: Processing design:', doc.id, data.title);
+          
+          // Handle timestamp conversion
+          const createdAt = data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt || Date.now());
+          const updatedAt = data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt || Date.now());
+          
+          designs.push({
+            id: doc.id,
+            ...data,
+            createdAt: createdAt.getTime(),
+            updatedAt: updatedAt.getTime()
+          });
+        } catch (docError) {
+          console.error('FirestoreService: Error processing document:', doc.id, docError);
+        }
       });
 
       const lastDoc = querySnapshot.docs[querySnapshot.docs.length - 1] || null;
       const hasMore = querySnapshot.docs.length === filters.limit;
+
+      console.log('FirestoreService: Query completed. Found', designs.length, 'designs');
+      console.log('FirestoreService: Has more:', hasMore);
 
       return {
         designs,
@@ -188,6 +253,37 @@ export class FirestoreService {
     } catch (error) {
       console.error('Error getting public designs:', error);
       throw error;
+    }
+  }
+
+  // Test method to create a sample design for debugging
+  async createTestDesign(): Promise<void> {
+    try {
+      console.log('FirestoreService: Creating test design...');
+      const testDesign = {
+        title: 'Test Design',
+        description: 'This is a test design to verify Firestore connectivity',
+        roomDimensions: { width: 10, length: 12, height: 9 },
+        furniture: [],
+        budget: 1000,
+        roomType: 'living',
+        tags: ['test', 'debug'],
+        isPublic: true,
+        author: {
+          uid: 'test-user',
+          displayName: 'Test User',
+          photoURL: null
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        likes: 0,
+        views: 0
+      };
+
+      const docRef = await addDoc(this.designsCollection, testDesign);
+      console.log('FirestoreService: Test design created with ID:', docRef.id);
+    } catch (error) {
+      console.error('FirestoreService: Error creating test design:', error);
     }
   }
 

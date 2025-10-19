@@ -50,6 +50,7 @@ export class RoomBuilderApp {
       <div class="app-container">
         <div class="sidebar">
           <div id="user-profile"></div>
+          <div id="room-management"></div>
           <div id="room-setup"></div>
           <div id="furniture-palette"></div>
           <div id="suggestions"></div>
@@ -63,7 +64,9 @@ export class RoomBuilderApp {
             <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
             <button id="reset-view" class="btn-secondary">Reset View</button>
             <button id="publish-design" class="btn-primary">Publish Design</button>
-            <button id="browse-designs" class="btn-secondary">Browse Community</button>
+            <button id="browse-designs" class="btn-secondary">
+              <i class="icon-community"></i> Browse Community
+            </button>
           </div>
           <div class="instructions">
             <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
@@ -74,11 +77,33 @@ export class RoomBuilderApp {
     `;
 
     this.setupUserProfile();
+    this.setupRoomManagement();
     this.setupRoomInput();
     this.setupFurniturePalette();
     this.setupBudgetTracker();
     this.setupEventListeners();
     this.setupAuthStateListener();
+  }
+
+  private setupRoomManagement(): void {
+    const roomManagement = document.getElementById('room-management')!;
+    roomManagement.innerHTML = `
+      <div class="room-management-section">
+        <h3>Room Management</h3>
+        <div class="room-actions">
+          <button id="clear-room-btn" class="btn-warning" disabled>Clear Room</button>
+          <button id="delete-room-btn" class="btn-danger" disabled>Delete Room</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('clear-room-btn')?.addEventListener('click', () => {
+      this.clearCurrentRoom();
+    });
+
+    document.getElementById('delete-room-btn')?.addEventListener('click', () => {
+      this.deleteCurrentRoom();
+    });
   }
 
   private setupRoomInput(): void {
@@ -260,6 +285,9 @@ export class RoomBuilderApp {
       if (roomSetup) roomSetup.style.display = 'none';
       if (furniturePalette) furniturePalette.style.display = 'block';
       
+      // Update room management buttons
+      this.updateRoomManagementButtons();
+      
       console.log('Room created successfully!');
     } catch (error) {
       console.error('Error creating room:', error);
@@ -284,6 +312,7 @@ export class RoomBuilderApp {
     this.room3D.addFurniture(furniture);
     this.state.furniture.push(furniture);
     this.updateBudgetDisplay();
+    this.updateRoomManagementButtons(); // Update button states after adding furniture
     
     console.log(`Added ${furniture.name} to room at position (${furniture.x}, ${furniture.y}, ${furniture.z})`);
   }
@@ -389,6 +418,9 @@ export class RoomBuilderApp {
       // Update budget display
       this.updateBudgetDisplay();
       
+      // Update room management buttons
+      this.updateRoomManagementButtons();
+      
       console.log('Furniture deleted successfully');
     }
   }
@@ -429,11 +461,23 @@ export class RoomBuilderApp {
       return;
     }
 
+    // Capture thumbnail if room3D is available
+    let thumbnail = '';
+    if (this.room3D) {
+      try {
+        thumbnail = this.room3D.captureThumbnail();
+        console.log('Thumbnail captured for design');
+      } catch (error) {
+        console.error('Error capturing thumbnail:', error);
+      }
+    }
+
     const designData = {
       roomDimensions: this.state.roomDimensions,
       furniture: this.state.furniture,
       budget: this.state.budget,
-      roomType: this.state.roomType
+      roomType: this.state.roomType,
+      thumbnail: thumbnail
     };
 
     this.publishDialog.show(designData, (designId) => {
@@ -465,8 +509,20 @@ export class RoomBuilderApp {
 
     // Listen for design selection
     galleryContainer.addEventListener('designSelected', (e: any) => {
+      console.log('App: designSelected event received:', e.detail);
       const design = e.detail.design;
       this.loadDesignFromGallery(design);
+    });
+
+    // Listen for navigation events
+    galleryContainer.addEventListener('navigateToBuilder', (e: any) => {
+      const action = e.detail.action;
+      if (action === 'createNewRoom') {
+        this.showBuilder();
+        this.createNewRoom();
+      } else if (action === 'backToBuilder') {
+        this.showBuilder();
+      }
     });
 
     // Update button text
@@ -487,7 +543,9 @@ export class RoomBuilderApp {
         <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
         <button id="reset-view" class="btn-secondary">Reset View</button>
         <button id="publish-design" class="btn-primary">Publish Design</button>
-        <button id="browse-designs" class="btn-secondary">Browse Community</button>
+        <button id="browse-designs" class="btn-secondary">
+          <i class="icon-community"></i> Browse Community
+        </button>
       </div>
       <div class="instructions">
         <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
@@ -495,19 +553,28 @@ export class RoomBuilderApp {
       </div>
     `;
 
-    // Re-setup event listeners
+    // Re-setup event listeners and room management
     this.setupEventListeners();
+    this.setupRoomManagement();
+    this.updateRoomManagementButtons();
 
     // Re-initialize 3D viewport if room exists
-    if (this.state.roomDimensions && this.room3D) {
-      const viewport = document.getElementById('3d-viewport')!;
-      this.room3D = new Room3D(viewport);
-      this.room3D.createRoom(this.state.roomDimensions);
-      
-      // Re-add furniture
-      this.state.furniture.forEach(furniture => {
-        this.room3D.addFurniture(furniture);
-      });
+    if (this.state.roomDimensions) {
+      try {
+        const viewport = document.getElementById('3d-viewport')!;
+        this.room3D = new Room3D(viewport);
+        this.room3D.createRoom(this.state.roomDimensions);
+        
+        // Re-add furniture
+        this.state.furniture.forEach(furniture => {
+          this.room3D.addFurniture(furniture);
+        });
+        
+        console.log('3D viewport re-initialized successfully');
+      } catch (error) {
+        console.error('Error re-initializing 3D viewport:', error);
+        // Don't show alert here as it might be called during navigation
+      }
     }
 
     // Update button text
@@ -516,6 +583,8 @@ export class RoomBuilderApp {
   }
 
   private loadDesignFromGallery(design: any): void {
+    console.log('App: loadDesignFromGallery called with design:', design);
+    
     // Switch back to builder view
     this.showBuilder();
     
@@ -525,22 +594,41 @@ export class RoomBuilderApp {
     this.state.budget = design.budget;
     this.state.roomType = design.roomType;
 
+    console.log('App: Design data loaded:', {
+      roomDimensions: this.state.roomDimensions,
+      furnitureCount: this.state.furniture.length,
+      budget: this.state.budget,
+      roomType: this.state.roomType
+    });
+
     // Update the UI
     this.updateBudgetDisplay();
     
     // Create the room and add furniture
     if (this.state.roomDimensions) {
-      const viewport = document.getElementById('3d-viewport')!;
-      this.room3D = new Room3D(viewport);
-      this.room3D.createRoom(this.state.roomDimensions);
-      
-      // Add furniture
-      this.state.furniture.forEach(furniture => {
-        this.room3D.addFurniture(furniture);
-      });
+      try {
+        console.log('App: Creating room with dimensions:', this.state.roomDimensions);
+        const viewport = document.getElementById('3d-viewport')!;
+        this.room3D = new Room3D(viewport);
+        this.room3D.createRoom(this.state.roomDimensions);
+        
+        // Add furniture
+        console.log('App: Adding furniture:', this.state.furniture.length, 'items');
+        this.state.furniture.forEach(furniture => {
+          console.log('App: Adding furniture:', furniture.name);
+          this.room3D.addFurniture(furniture);
+        });
+        
+        // Update room management buttons
+        this.updateRoomManagementButtons();
+        
+      } catch (error) {
+        console.error('App: Error loading design into 3D viewport:', error);
+        alert('Error loading design. Please try again.');
+      }
     }
 
-    console.log('Loaded design from gallery:', design.title);
+    console.log('App: Loaded design from gallery:', design.title);
   }
 
   // Removed unused saveDesign method - using publishDesign instead
@@ -581,6 +669,128 @@ export class RoomBuilderApp {
       } else {
         publishBtn.textContent = 'Sign in to Publish';
         publishBtn.title = 'Sign in with Google to publish your design';
+      }
+    }
+  }
+
+
+  private deleteCurrentRoom(): void {
+    if (!this.state.roomDimensions) {
+      // If no room exists, just reset to initial state
+      console.log('No room to delete, resetting to initial state...');
+      this.resetToInitialState();
+      return;
+    }
+
+    if (confirm('Are you sure you want to delete the current room? This will remove all furniture and reset the design.')) {
+      console.log('Deleting current room...');
+      this.resetToInitialState();
+      console.log('Room deleted successfully');
+    }
+  }
+
+  private resetToInitialState(): void {
+    // Reset the application state
+    this.state = {
+      roomDimensions: null,
+      furniture: [],
+      selectedFurniture: null,
+      isEditing: false,
+      budget: 1000,
+      roomType: 'living'
+    };
+
+    // Safely clear the 3D viewport without breaking it
+    this.safelyClearViewport();
+
+    // Show room setup form and hide furniture palette
+    const roomSetup = document.getElementById('room-setup');
+    const furniturePalette = document.getElementById('furniture-palette');
+    
+    if (roomSetup) roomSetup.style.display = 'block';
+    if (furniturePalette) furniturePalette.style.display = 'none';
+
+    // Update budget display
+    this.updateBudgetDisplay();
+
+    // Update room management buttons
+    this.updateRoomManagementButtons();
+
+    console.log('Reset to initial state - ready for new room setup');
+  }
+
+  private clearCurrentRoom(): void {
+    if (!this.state.roomDimensions) {
+      alert('No room to clear');
+      return;
+    }
+
+    if (confirm('Are you sure you want to clear all furniture from the current room? The room will remain but all furniture will be removed.')) {
+      console.log('Clearing furniture from current room...');
+      
+      // Store furniture list before clearing
+      const furnitureToRemove = [...this.state.furniture];
+      
+      // Clear furniture from 3D scene first
+      if (this.room3D) {
+        furnitureToRemove.forEach(furniture => {
+          this.room3D.removeFurniture(furniture.id);
+        });
+      }
+      
+      // Clear furniture from state and manager
+      this.state.furniture = [];
+      this.furnitureManager = new FurnitureManager(); // Reset furniture manager
+
+      // Update budget display
+      this.updateBudgetDisplay();
+
+      // Update room management buttons
+      this.updateRoomManagementButtons();
+
+      console.log('Room cleared successfully - furniture removed');
+    }
+  }
+
+  private updateRoomManagementButtons(): void {
+    const deleteBtn = document.getElementById('delete-room-btn') as HTMLButtonElement;
+    const clearBtn = document.getElementById('clear-room-btn') as HTMLButtonElement;
+    
+    // Delete Room button is always enabled (can reset to initial state)
+    if (deleteBtn) {
+      deleteBtn.disabled = false;
+    }
+    
+    // Clear Room button is only enabled when there's a room AND furniture
+    if (clearBtn) {
+      clearBtn.disabled = !this.state.roomDimensions || this.state.furniture.length === 0;
+    }
+  }
+
+  private safelyClearViewport(): void {
+    try {
+      console.log('Safely clearing 3D viewport...');
+      
+      // Get the viewport element
+      const viewport = document.getElementById('3d-viewport');
+      if (!viewport) {
+        console.log('Viewport element not found');
+        return;
+      }
+
+      // Clear the viewport content
+      viewport.innerHTML = '';
+      
+      // Reset the room3D reference
+      this.room3D = null;
+      
+      console.log('Viewport cleared safely');
+    } catch (error) {
+      console.error('Error clearing viewport:', error);
+      // If there's an error, just clear the innerHTML as a fallback
+      const viewport = document.getElementById('3d-viewport');
+      if (viewport) {
+        viewport.innerHTML = '';
       }
     }
   }
