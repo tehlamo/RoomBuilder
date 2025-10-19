@@ -10,7 +10,7 @@ import {UserProfile} from './components/UserProfile';
 import {LoginModal} from './components/LoginModal';
 
 export class RoomBuilderApp {
-  private room3D!: Room3D;
+  private room3D: Room3D | null = null;
   private furnitureManager!: FurnitureManager;
   private decorationAI!: DecorationAI;
   private designGallery!: DesignGallery;
@@ -59,15 +59,64 @@ export class RoomBuilderApp {
         </div>
         <div class="main-content">
           <div id="3d-viewport"></div>
+          <div class="drag-instructions hidden" id="drag-instructions">
+            <strong>Drag Mode:</strong> Click and drag furniture to move them around the room
+          </div>
+          <div class="selection-instructions hidden" id="selection-instructions">
+            <strong>Selection Mode:</strong> Click furniture to select, then use colored handles to move along specific axes
+            <br><span class="handle-x">Red = X-axis</span> | <span class="handle-y">Green = Y-axis</span> | <span class="handle-z">Blue = Z-axis</span>
+            <br><strong>Rotation:</strong> <span class="handle-x">Red sphere = X-rotation</span> | <span class="handle-y">Green sphere = Y-rotation</span> | <span class="handle-z">Blue sphere = Z-rotation</span>
+          </div>
           <div class="controls">
             <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
             <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
             <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
             <button id="reset-view" class="btn-secondary">Reset View</button>
+            <button id="toggle-bounding-boxes" class="btn-secondary">Show Bounding Boxes</button>
             <button id="publish-design" class="btn-primary">Publish Design</button>
             <button id="browse-designs" class="btn-secondary">
               <i class="icon-community"></i> Browse Community
             </button>
+          </div>
+          <div class="manipulation-controls" id="manipulation-controls" style="display: none;">
+            <div class="manipulation-mode-buttons">
+              <button id="manipulation-mode-move" class="btn-manipulation active" data-mode="move">
+                <i class="icon-move"></i> Move
+              </button>
+              <button id="manipulation-mode-rotate" class="btn-manipulation" data-mode="rotate">
+                <i class="icon-rotate"></i> Rotate
+              </button>
+              <button id="manipulation-mode-delete" class="btn-manipulation" data-mode="delete">
+                <i class="icon-delete"></i> Delete
+              </button>
+            </div>
+            <div class="manipulation-actions" id="manipulation-actions" style="display: none;">
+              <div class="position-controls">
+                <label>Position:</label>
+                <div class="position-inputs">
+                  <input type="number" id="position-x" placeholder="X" step="0.1">
+                  <input type="number" id="position-y" placeholder="Y" step="0.1">
+                  <input type="number" id="position-z" placeholder="Z" step="0.1">
+                  <button id="apply-position" class="btn-small">Apply</button>
+                </div>
+              </div>
+              <div class="rotation-controls">
+                <label>Rotation:</label>
+                <div class="rotation-buttons">
+                  <button id="rotate-left" class="btn-small">↺ 45°</button>
+                  <button id="rotate-right" class="btn-small">↻ 45°</button>
+                </div>
+              </div>
+              <div class="drag-settings">
+                <label>Drag Settings:</label>
+                <div class="drag-options">
+                  <label class="checkbox-label">
+                    <input type="checkbox" id="snap-to-grid" checked>
+                    <span>Snap to Grid (0.5 units)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="instructions">
             <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
@@ -114,16 +163,31 @@ export class RoomBuilderApp {
       <div class="form-section">
         <h3>Room Dimensions</h3>
         <div class="input-group">
-          <label for="width">Width (ft):</label>
-          <input type="number" id="width" min="1" max="50" step="0.1" placeholder="12">
+          <label for="width">Width:</label>
+          <div class="dimension-input">
+            <input type="number" id="width-ft" min="1" max="50" step="1" placeholder="12" value="12">
+            <span>ft</span>
+            <input type="number" id="width-in" min="0" max="11" step="1" placeholder="0" value="0">
+            <span>in</span>
+          </div>
         </div>
         <div class="input-group">
-          <label for="length">Length (ft):</label>
-          <input type="number" id="length" min="1" max="50" step="0.1" placeholder="15">
+          <label for="length">Length:</label>
+          <div class="dimension-input">
+            <input type="number" id="length-ft" min="1" max="50" step="1" placeholder="15" value="15">
+            <span>ft</span>
+            <input type="number" id="length-in" min="0" max="11" step="1" placeholder="0" value="0">
+            <span>in</span>
+          </div>
         </div>
         <div class="input-group">
-          <label for="height">Height (ft):</label>
-          <input type="number" id="height" min="6" max="20" step="0.1" placeholder="9">
+          <label for="height">Height:</label>
+          <div class="dimension-input">
+            <input type="number" id="height-ft" min="6" max="20" step="1" placeholder="9" value="9">
+            <span>ft</span>
+            <input type="number" id="height-in" min="0" max="11" step="1" placeholder="0" value="0">
+            <span>in</span>
+          </div>
         </div>
         <button id="create-room" class="btn-primary">Create Room</button>
       </div>
@@ -143,6 +207,7 @@ export class RoomBuilderApp {
         <h3>Furniture Library</h3>
         <div class="category-tabs">
           <button class="tab-btn active" data-category="all">All</button>
+          <button class="tab-btn" data-category="bedroom">Bedroom</button>
           <button class="tab-btn" data-category="seating">Seating</button>
           <button class="tab-btn" data-category="storage">Storage</button>
           <button class="tab-btn" data-category="lighting">Lighting</button>
@@ -241,6 +306,10 @@ export class RoomBuilderApp {
       this.resetCameraView();
     });
 
+    document.getElementById('toggle-bounding-boxes')?.addEventListener('click', () => {
+      this.toggleBoundingBoxes();
+    });
+
     document.getElementById('publish-design')?.addEventListener('click', () => {
       this.publishDesign();
     });
@@ -248,6 +317,62 @@ export class RoomBuilderApp {
     document.getElementById('browse-designs')?.addEventListener('click', () => {
       this.toggleGallery();
     });
+
+    // Manipulation controls
+    this.setupManipulationEventListeners();
+  }
+
+  private setupManipulationEventListeners(): void {
+    // Manipulation mode buttons
+    document.querySelectorAll('.btn-manipulation').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement;
+        const mode = target.dataset.mode as 'move' | 'rotate' | 'delete';
+        this.setManipulationMode(mode);
+      });
+    });
+
+    // Position controls
+    document.getElementById('apply-position')?.addEventListener('click', () => {
+      this.applyPosition();
+    });
+
+    // Rotation controls
+    document.getElementById('rotate-left')?.addEventListener('click', () => {
+      this.rotateSelectedFurniture('counterclockwise');
+    });
+
+    document.getElementById('rotate-right')?.addEventListener('click', () => {
+      this.rotateSelectedFurniture('clockwise');
+    });
+
+    // Snap to grid toggle
+    document.getElementById('snap-to-grid')?.addEventListener('change', (e) => {
+      const checkbox = e.target as HTMLInputElement;
+      if (this.room3D) {
+        this.room3D.setSnapToGrid(checkbox.checked);
+      }
+    });
+
+    // Listen for furniture selection events from Room3D
+    const viewport = document.getElementById('3d-viewport');
+    if (viewport) {
+      viewport.addEventListener('furnitureSelected', (e: any) => {
+        this.onFurnitureSelected(e.detail);
+      });
+
+      viewport.addEventListener('furnitureDeselected', (e: any) => {
+        this.onFurnitureDeselected(e.detail);
+      });
+
+      viewport.addEventListener('furnitureDragged', (e: any) => {
+        this.onFurnitureDragged(e.detail);
+      });
+
+      viewport.addEventListener('furnitureDeleted', (e: any) => {
+        this.onFurnitureDeleted(e.detail);
+      });
+    }
   }
 
   private handleCreateRoom(): void {
@@ -264,20 +389,27 @@ export class RoomBuilderApp {
   }
 
   private proceedWithCreateRoom(): void {
-    const currentUser = this.authService.getCurrentUser();
-    console.log(`Welcome back, ${currentUser?.displayName || 'User'}! Creating your room...`);
     
-    const width = parseFloat((document.getElementById('width') as HTMLInputElement).value);
-    const length = parseFloat((document.getElementById('length') as HTMLInputElement).value);
-    const height = parseFloat((document.getElementById('height') as HTMLInputElement).value);
+    // Get feet and inches for each dimension
+    const widthFt = parseInt((document.getElementById('width-ft') as HTMLInputElement).value) || 0;
+    const widthIn = parseInt((document.getElementById('width-in') as HTMLInputElement).value) || 0;
+    const lengthFt = parseInt((document.getElementById('length-ft') as HTMLInputElement).value) || 0;
+    const lengthIn = parseInt((document.getElementById('length-in') as HTMLInputElement).value) || 0;
+    const heightFt = parseInt((document.getElementById('height-ft') as HTMLInputElement).value) || 0;
+    const heightIn = parseInt((document.getElementById('height-in') as HTMLInputElement).value) || 0;
 
-    if (!width || !length || !height) {
-      alert('Please enter all dimensions');
-      return;
-    }
+    // Convert to total feet (with decimal for inches)
+    const width = widthFt + (widthIn / 12);
+    const length = lengthFt + (lengthIn / 12);
+    const height = heightFt + (heightIn / 12);
 
     if (width <= 0 || length <= 0 || height <= 0) {
       alert('All dimensions must be greater than 0');
+      return;
+    }
+
+    if (width < 6 || length < 6 || height < 6) {
+      alert('Room dimensions must be at least 6 feet in all directions');
       return;
     }
 
@@ -291,7 +423,7 @@ export class RoomBuilderApp {
         throw new Error('3D viewport element not found');
       }
       
-      this.room3D = new Room3D(viewport);
+      this.room3D = new Room3D(viewport, this);
       this.room3D.createRoom(dimensions);
       
       // Update UI
@@ -303,8 +435,7 @@ export class RoomBuilderApp {
       
       // Update room management buttons
       this.updateRoomManagementButtons();
-      
-      console.log('Room created successfully!');
+      this.updateAllButtonStates();
     } catch (error) {
       console.error('Error creating room:', error);
       alert('Error creating room. Please check the console for details.');
@@ -331,19 +462,20 @@ export class RoomBuilderApp {
     }
 
     const position = {
-      x: (this.state.roomDimensions.width - template.dimensions.width) / 2,
-      y: 0,
-      z: (this.state.roomDimensions.length - template.dimensions.depth) / 2,
+      x: 0, // Center of room (room is centered at origin)
+      y: template.dimensions.height / 2, // Half height above floor (floor is at Y=0)
+      z: 0, // Center of room (room is centered at origin)
       rotation: 0
     };
 
     const furniture = this.furnitureManager.addFurniture(template, position);
-    this.room3D.addFurniture(furniture);
+    if (this.room3D) {
+      this.room3D.addFurniture(furniture);
+    }
     this.state.furniture.push(furniture);
     this.updateBudgetDisplay();
-    this.updateRoomManagementButtons(); // Update button states after adding furniture
-    
-    console.log(`Added ${furniture.name} to room at position (${furniture.x}, ${furniture.y}, ${furniture.z})`);
+    this.updateRoomManagementButtons();
+    this.updateAllButtonStates();
   }
 
   private updateBudgetDisplay(): void {
@@ -383,6 +515,11 @@ export class RoomBuilderApp {
     }
 
     try {
+      const isConnected = await this.decorationAI.testConnection();
+      
+      if (!isConnected) {
+        throw new Error('Cannot connect to Gemini API. Please check your API key.');
+      }
       const suggestions = await this.decorationAI.getDecorationSuggestions(
         this.state.roomDimensions,
         this.state.furniture,
@@ -393,7 +530,19 @@ export class RoomBuilderApp {
       this.displaySuggestions(suggestions);
     } catch (error) {
       console.error('Error getting AI suggestions:', error);
-      alert('Error getting AI suggestions.');
+      this.showNotification('AI suggestions unavailable. Please check your API key and try again.', 'error');
+      
+      // Show empty suggestions section with error message
+      const suggestionsDiv = document.getElementById('suggestions')!;
+      suggestionsDiv.innerHTML = `
+        <div class="suggestions-section">
+          <h3>AI Suggestions</h3>
+          <div class="suggestion-error">
+            <p>Unable to get AI suggestions. Please ensure your Gemini API key is configured correctly.</p>
+            <p>Check the console for more details.</p>
+          </div>
+        </div>
+      `;
     }
   }
 
@@ -403,8 +552,8 @@ export class RoomBuilderApp {
       <div class="suggestions-section">
         <h3>AI Suggestions</h3>
         <div class="suggestions-list">
-          ${suggestions.map(suggestion => `
-            <div class="suggestion-item">
+          ${suggestions.map((suggestion, index) => `
+            <div class="suggestion-item" data-suggestion-index="${index}">
               <div class="suggestion-header">
                 <span class="suggestion-name">${suggestion.item}</span>
                 <span class="suggestion-cost">$${suggestion.estimatedCost}</span>
@@ -414,11 +563,150 @@ export class RoomBuilderApp {
                 <span class="suggestion-category">${suggestion.category}</span>
                 <span class="suggestion-priority priority-${suggestion.priority}">${suggestion.priority}</span>
               </div>
+              <div class="suggestion-actions">
+                <button class="btn-small btn-primary add-suggestion-btn" data-suggestion-index="${index}">
+                  Add to Room
+                </button>
+                <button class="btn-small btn-secondary view-details-btn" data-suggestion-index="${index}">
+                  View Details
+                </button>
+              </div>
             </div>
           `).join('')}
         </div>
       </div>
     `;
+
+    // Add event listeners for suggestion actions
+    this.setupSuggestionEventListeners(suggestions);
+  }
+
+  private setupSuggestionEventListeners(suggestions: any[]): void {
+    // Add to room buttons
+    document.querySelectorAll('.add-suggestion-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const index = parseInt((e.target as HTMLElement).dataset.suggestionIndex!);
+        const suggestion = suggestions[index];
+        await this.addSuggestionToRoom(suggestion);
+      });
+    });
+
+    // View details buttons
+    document.querySelectorAll('.view-details-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const index = parseInt((e.target as HTMLElement).dataset.suggestionIndex!);
+        const suggestion = suggestions[index];
+        this.showSuggestionDetails(suggestion);
+      });
+    });
+  }
+
+  private async addSuggestionToRoom(suggestion: any): Promise<void> {
+    try {
+      // Check if user is authenticated
+      if (!this.authService.isAuthenticated()) {
+        this.loginModal.show(() => {
+          this.addSuggestionToRoom(suggestion);
+        });
+        return;
+      }
+
+      // Create furniture template from AI suggestion
+      const furnitureTemplate = await this.decorationAI.createFurnitureFromSuggestion(suggestion);
+      
+      // Add to room using existing furniture system
+      const position = {
+        x: 0,
+        y: furnitureTemplate.dimensions.height / 2,
+        z: 0,
+        rotation: 0
+      };
+
+      const furniture = this.furnitureManager.addFurniture(furnitureTemplate, position);
+      if (this.room3D) {
+        this.room3D.addFurniture(furniture);
+      }
+      this.state.furniture.push(furniture);
+      this.updateBudgetDisplay();
+      this.updateRoomManagementButtons();
+      this.updateAllButtonStates();
+
+      this.showNotification(`Added "${furniture.name}" to your room!`, 'success');
+      
+    } catch (error) {
+      console.error('Error adding suggestion to room:', error);
+      this.showNotification('Error adding suggestion to room', 'error');
+    }
+  }
+
+  private showSuggestionDetails(suggestion: any): void {
+    // Create a modal or detailed view for the suggestion
+    const modal = document.createElement('div');
+    modal.className = 'suggestion-modal';
+    modal.innerHTML = `
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>${suggestion.item}</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p><strong>Description:</strong> ${suggestion.description}</p>
+          <p><strong>Category:</strong> ${suggestion.category}</p>
+          <p><strong>Priority:</strong> ${suggestion.priority}</p>
+          <p><strong>Estimated Cost:</strong> $${suggestion.estimatedCost}</p>
+          ${suggestion.dimensions ? `
+            <p><strong>Dimensions:</strong> ${suggestion.dimensions.width}ft × ${suggestion.dimensions.height}ft × ${suggestion.dimensions.depth}ft</p>
+          ` : ''}
+          ${suggestion.brand ? `
+            <p><strong>Brand:</strong> ${suggestion.brand}</p>
+          ` : ''}
+          ${suggestion.reasoning ? `
+            <p><strong>Why this fits:</strong> ${suggestion.reasoning}</p>
+          ` : ''}
+          ${suggestion.productUrl ? `
+            <p><strong>Product Link:</strong> <a href="${suggestion.productUrl}" target="_blank" rel="noopener noreferrer">View Product →</a></p>
+          ` : ''}
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary add-suggestion-btn">Add to Room</button>
+          <button class="btn-secondary close-modal">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('.close-modal')?.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+
+    modal.querySelector('.add-suggestion-btn')?.addEventListener('click', async () => {
+      await this.addSuggestionToRoom(suggestion);
+      document.body.removeChild(modal);
+    });
+
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
+  }
+
+  private showNotification(message: string, type: 'success' | 'error'): void {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+      if (document.body.contains(notification)) {
+        document.body.removeChild(notification);
+      }
+    }, 3000);
   }
 
   private toggleEditMode(): void {
@@ -438,18 +726,69 @@ export class RoomBuilderApp {
     this.state.isEditing = !this.state.isEditing;
     const editButton = document.getElementById('edit-mode') as HTMLButtonElement;
     const deleteButton = document.getElementById('delete-selected') as HTMLButtonElement;
+    const manipulationControls = document.getElementById('manipulation-controls');
     
     if (this.state.isEditing) {
       editButton.textContent = 'Exit Edit';
       editButton.classList.add('active');
       deleteButton.disabled = false;
-      console.log('Edit mode enabled - furniture can be selected and moved');
+      
+      // Show manipulation controls
+      if (manipulationControls) {
+        manipulationControls.style.display = 'block';
+      }
+      
+      // Show drag instructions
+      const dragInstructions = document.getElementById('drag-instructions');
+      if (dragInstructions) {
+        dragInstructions.classList.remove('hidden');
+      }
+      
+      // Show selection instructions
+      const selectionInstructions = document.getElementById('selection-instructions');
+      if (selectionInstructions) {
+        selectionInstructions.classList.remove('hidden');
+      }
+      
+      // Add drag mode class to viewport
+      const viewport = document.getElementById('3d-viewport');
+      if (viewport) {
+        viewport.classList.add('drag-mode');
+      }
+      
+      this.setManipulationMode('move');
     } else {
       editButton.textContent = 'Edit Mode';
       editButton.classList.remove('active');
       deleteButton.disabled = true;
       this.state.selectedFurniture = null;
-      console.log('Edit mode disabled');
+      
+      // Hide manipulation controls
+      if (manipulationControls) {
+        manipulationControls.style.display = 'none';
+      }
+      
+      // Hide drag instructions
+      const dragInstructions = document.getElementById('drag-instructions');
+      if (dragInstructions) {
+        dragInstructions.classList.add('hidden');
+      }
+      
+      // Hide selection instructions
+      const selectionInstructions = document.getElementById('selection-instructions');
+      if (selectionInstructions) {
+        selectionInstructions.classList.add('hidden');
+      }
+      
+      // Remove drag mode class from viewport
+      const viewport = document.getElementById('3d-viewport');
+      if (viewport) {
+        viewport.classList.remove('drag-mode', 'dragging');
+      }
+      
+      if (this.room3D) {
+        this.room3D.setManipulationMode('none');
+      }
     }
   }
 
@@ -477,7 +816,9 @@ export class RoomBuilderApp {
       this.furnitureManager.removeFurniture(this.state.selectedFurniture.id);
       
       // Remove from 3D scene
-      this.room3D.removeFurniture(this.state.selectedFurniture.id);
+      if (this.room3D) {
+        this.room3D.removeFurniture(this.state.selectedFurniture.id);
+      }
       
       // Remove from state
       this.state.furniture = this.state.furniture.filter(f => f.id !== this.state.selectedFurniture!.id);
@@ -486,10 +827,8 @@ export class RoomBuilderApp {
       // Update budget display
       this.updateBudgetDisplay();
       
-      // Update room management buttons
       this.updateRoomManagementButtons();
-      
-      console.log('Furniture deleted successfully');
+      this.updateAllButtonStates();
     }
   }
 
@@ -512,10 +851,21 @@ export class RoomBuilderApp {
       return;
     }
 
-    // This would need to be implemented in Room3D class
-    // For now, just log the action
-    console.log('Resetting camera view to default position');
-    alert('Camera view reset (functionality to be implemented)');
+    this.room3D.resetView();
+  }
+
+  private toggleBoundingBoxes(): void {
+    if (!this.room3D) {
+      alert('Please create a room first');
+      return;
+    }
+
+    const button = document.getElementById('toggle-bounding-boxes') as HTMLButtonElement;
+    const isCurrentlyVisible = button.textContent === 'Hide Bounding Boxes';
+    
+    this.room3D.toggleBoundingBoxes(!isCurrentlyVisible);
+    
+    button.textContent = isCurrentlyVisible ? 'Show Bounding Boxes' : 'Hide Bounding Boxes';
   }
 
   private publishDesign(): void {
@@ -535,12 +885,10 @@ export class RoomBuilderApp {
       return;
     }
 
-    // Capture thumbnail if room3D is available
     let thumbnail = '';
     if (this.room3D) {
       try {
         thumbnail = this.room3D.captureThumbnail();
-        console.log('Thumbnail captured for design');
       } catch (error) {
         console.error('Error capturing thumbnail:', error);
       }
@@ -555,15 +903,8 @@ export class RoomBuilderApp {
     };
 
     this.publishDialog.show(designData, (designId) => {
-      console.log('Design published with ID:', designId);
-      
-      // Mark the room as published to disable clear room button
       this.state.isPublished = true;
-      
-      // Update room management buttons to reflect published state
       this.updateRoomManagementButtons();
-      
-      // Switch to gallery view to see the published design
       this.showGallery();
     });
   }
@@ -583,8 +924,6 @@ export class RoomBuilderApp {
 
   private proceedWithToggleGallery(): void {
     if (this.currentView === 'builder') {
-      const currentUser = this.authService.getCurrentUser();
-      console.log(`Welcome back, ${currentUser?.displayName || 'User'}! Loading community designs...`);
       this.showGallery();
     } else {
       this.showBuilder();
@@ -603,9 +942,7 @@ export class RoomBuilderApp {
     this.designGallery = new DesignGallery(galleryContainer, this.authService);
     this.designGallery.initialize();
 
-    // Listen for design selection
     galleryContainer.addEventListener('designSelected', (e: any) => {
-      console.log('App: designSelected event received:', e.detail);
       const design = e.detail.design;
       this.loadDesignFromGallery(design);
     });
@@ -615,7 +952,7 @@ export class RoomBuilderApp {
       const action = e.detail.action;
       if (action === 'createNewRoom') {
         this.showBuilder();
-        this.createNewRoom();
+        this.resetToInitialState();
       } else if (action === 'backToBuilder') {
         this.showBuilder();
       }
@@ -633,15 +970,64 @@ export class RoomBuilderApp {
     const mainContent = document.querySelector('.main-content') as HTMLElement;
     mainContent.innerHTML = `
       <div id="3d-viewport"></div>
+      <div class="drag-instructions hidden" id="drag-instructions">
+        <strong>Drag Mode:</strong> Click and drag furniture to move them around the room
+      </div>
+      <div class="selection-instructions hidden" id="selection-instructions">
+        <strong>Selection Mode:</strong> Click furniture to select, then use colored handles to move along specific axes
+        <br><span class="handle-x">Red = X-axis</span> | <span class="handle-y">Green = Y-axis</span> | <span class="handle-z">Blue = Z-axis</span>
+        <br><strong>Rotation:</strong> <span class="handle-x">Red sphere = X-rotation</span> | <span class="handle-y">Green sphere = Y-rotation</span> | <span class="handle-z">Blue sphere = Z-rotation</span>
+      </div>
       <div class="controls">
         <button id="get-suggestions" class="btn-secondary">Get AI Suggestions</button>
         <button id="edit-mode" class="btn-secondary" disabled>Edit Mode</button>
         <button id="delete-selected" class="btn-secondary" disabled>Delete Selected</button>
         <button id="reset-view" class="btn-secondary">Reset View</button>
+        <button id="toggle-bounding-boxes" class="btn-secondary">Show Bounding Boxes</button>
         <button id="publish-design" class="btn-primary">Publish Design</button>
         <button id="browse-designs" class="btn-secondary">
           <i class="icon-community"></i> Browse Community
         </button>
+      </div>
+      <div class="manipulation-controls" id="manipulation-controls" style="display: none;">
+        <div class="manipulation-mode-buttons">
+          <button id="manipulation-mode-move" class="btn-manipulation active" data-mode="move">
+            <i class="icon-move"></i> Move
+          </button>
+          <button id="manipulation-mode-rotate" class="btn-manipulation" data-mode="rotate">
+            <i class="icon-rotate"></i> Rotate
+          </button>
+          <button id="manipulation-mode-delete" class="btn-manipulation" data-mode="delete">
+            <i class="icon-delete"></i> Delete
+          </button>
+        </div>
+        <div class="manipulation-actions" id="manipulation-actions" style="display: none;">
+          <div class="position-controls">
+            <label>Position:</label>
+            <div class="position-inputs">
+              <input type="number" id="position-x" placeholder="X" step="0.1">
+              <input type="number" id="position-y" placeholder="Y" step="0.1">
+              <input type="number" id="position-z" placeholder="Z" step="0.1">
+              <button id="apply-position" class="btn-small">Apply</button>
+            </div>
+          </div>
+          <div class="rotation-controls">
+            <label>Rotation:</label>
+            <div class="rotation-buttons">
+              <button id="rotate-left" class="btn-small">↺ 45°</button>
+              <button id="rotate-right" class="btn-small">↻ 45°</button>
+            </div>
+          </div>
+          <div class="drag-settings">
+            <label>Drag Settings:</label>
+            <div class="drag-options">
+              <label class="checkbox-label">
+                <input type="checkbox" id="snap-to-grid" checked>
+                <span>Snap to Grid (0.5 units)</span>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="instructions">
         <p><strong>3D Controls:</strong> Mouse to rotate, scroll to zoom, right-click + drag to pan</p>
@@ -658,12 +1044,14 @@ export class RoomBuilderApp {
     if (this.state.roomDimensions) {
       try {
         const viewport = document.getElementById('3d-viewport')!;
-        this.room3D = new Room3D(viewport);
+        this.room3D = new Room3D(viewport, this);
         this.room3D.createRoom(this.state.roomDimensions);
         
         // Re-add furniture
         this.state.furniture.forEach(furniture => {
-          this.room3D.addFurniture(furniture);
+          if (this.room3D) {
+            this.room3D.addFurniture(furniture);
+          }
         });
         
         console.log('3D viewport re-initialized successfully');
@@ -682,61 +1070,44 @@ export class RoomBuilderApp {
   }
 
   private loadDesignFromGallery(design: any): void {
-    console.log('App: loadDesignFromGallery called with design:', design);
-    
-    // Switch back to builder view
     this.showBuilder();
     
-    // Load the design data
     this.state.roomDimensions = design.roomDimensions;
     this.state.furniture = design.furniture;
     this.state.budget = design.budget;
     this.state.roomType = design.roomType;
-    this.state.isPublished = false; // Reset published state when loading design
-
-    console.log('App: Design data loaded:', {
-      roomDimensions: this.state.roomDimensions,
-      furnitureCount: this.state.furniture.length,
-      budget: this.state.budget,
-      roomType: this.state.roomType
-    });
+    this.state.isPublished = false;
 
     // Update the UI
     this.updateBudgetDisplay();
     
-    // Create the room and add furniture
     if (this.state.roomDimensions) {
       try {
-        console.log('App: Creating room with dimensions:', this.state.roomDimensions);
         const viewport = document.getElementById('3d-viewport')!;
-        
-        // Ensure the viewport has proper dimensions before creating Room3D
         viewport.style.width = '100%';
         viewport.style.height = 'calc(100vh - 70px)';
         
-        // Small delay to ensure DOM has updated
         setTimeout(() => {
-          this.room3D = new Room3D(viewport);
-          this.room3D.createRoom(this.state.roomDimensions);
+          this.room3D = new Room3D(viewport, this);
+          if (this.state.roomDimensions) {
+            this.room3D.createRoom(this.state.roomDimensions);
+          }
           
-          // Add furniture
-          console.log('App: Adding furniture:', this.state.furniture.length, 'items');
           this.state.furniture.forEach(furniture => {
-            console.log('App: Adding furniture:', furniture.name);
-            this.room3D.addFurniture(furniture);
+            if (this.room3D) {
+              this.room3D.addFurniture(furniture);
+            }
           });
           
-          // Update room management buttons
           this.updateRoomManagementButtons();
+          this.updateAllButtonStates();
         }, 100);
         
       } catch (error) {
-        console.error('App: Error loading design into 3D viewport:', error);
+        console.error('Error loading design into 3D viewport:', error);
         alert('Error loading design. Please try again.');
       }
     }
-
-    console.log('App: Loaded design from gallery:', design.title);
   }
 
   // Removed unused saveDesign method - using publishDesign instead
@@ -805,6 +1176,22 @@ export class RoomBuilderApp {
       browseBtn.textContent = 'Browse Community';
       browseBtn.title = 'Browse community designs';
       browseBtn.disabled = false; // Keep enabled to allow sign-in
+    }
+    
+    // Update edit mode button
+    const editBtn = document.getElementById('edit-mode') as HTMLButtonElement;
+    if (editBtn) {
+      const hasRoom = this.state.roomDimensions !== null;
+      const hasFurniture = this.state.furniture.length > 0;
+      const canEdit = isAuthenticated && hasRoom && hasFurniture;
+      
+      editBtn.disabled = !canEdit;
+      editBtn.title = canEdit ? 'Edit furniture in your room' : 'Create a room and add furniture first';
+      
+      if (!canEdit) {
+        editBtn.textContent = 'Edit Mode';
+        editBtn.classList.remove('active');
+      }
     }
     
     // Update room management buttons
@@ -880,6 +1267,7 @@ export class RoomBuilderApp {
 
     // Update room management buttons
     this.updateRoomManagementButtons();
+    this.updateAllButtonStates(); // Update all buttons including Edit Mode
 
     console.log('Reset to initial state - ready for new room setup');
   }
@@ -906,14 +1294,9 @@ export class RoomBuilderApp {
     if (confirm('Are you sure you want to clear all furniture from the current room? The room will remain but all furniture will be removed.')) {
       console.log('Clearing furniture from current room...');
       
-      // Store furniture list before clearing
-      const furnitureToRemove = [...this.state.furniture];
-      
       // Clear furniture from 3D scene first
       if (this.room3D) {
-        furnitureToRemove.forEach(furniture => {
-          this.room3D.removeFurniture(furniture.id);
-        });
+        this.room3D.clearAllFurniture();
       }
       
       // Clear furniture from state and manager
@@ -923,10 +1306,8 @@ export class RoomBuilderApp {
       // Update budget display
       this.updateBudgetDisplay();
 
-      // Update room management buttons
       this.updateRoomManagementButtons();
-
-      console.log('Room cleared successfully - furniture removed');
+      this.updateAllButtonStates();
     }
   }
 
@@ -958,35 +1339,177 @@ export class RoomBuilderApp {
       }
     }
     
-    // Also update all button states to ensure authentication status is reflected
     this.updateAllButtonStates();
   }
 
   private safelyClearViewport(): void {
     try {
-      console.log('Safely clearing 3D viewport...');
-      
-      // Get the viewport element
       const viewport = document.getElementById('3d-viewport');
-      if (!viewport) {
-        console.log('Viewport element not found');
-        return;
-      }
+      if (!viewport) return;
 
-      // Clear the viewport content
       viewport.innerHTML = '';
-      
-      // Reset the room3D reference
       this.room3D = null;
-      
-      console.log('Viewport cleared safely');
     } catch (error) {
       console.error('Error clearing viewport:', error);
-      // If there's an error, just clear the innerHTML as a fallback
       const viewport = document.getElementById('3d-viewport');
       if (viewport) {
         viewport.innerHTML = '';
       }
+    }
+  }
+
+  // ===== MANIPULATION SYSTEM =====
+
+  /**
+   * Set the manipulation mode
+   */
+  private setManipulationMode(mode: 'move' | 'rotate' | 'delete'): void {
+    if (!this.room3D) return;
+
+    // Set mode in Room3D
+    this.room3D.setManipulationMode(mode);
+
+    this.updateManipulationUI(mode);
+  }
+
+  /**
+   * Update manipulation UI based on mode
+   */
+  private updateManipulationUI(mode: string): void {
+    // Update active button
+    document.querySelectorAll('.btn-manipulation').forEach(btn => {
+      btn.classList.remove('active');
+    });
+    document.querySelector(`[data-mode="${mode}"]`)?.classList.add('active');
+
+    // Show/hide manipulation controls
+    const manipulationControls = document.getElementById('manipulation-controls');
+    const manipulationActions = document.getElementById('manipulation-actions');
+    
+    if (manipulationControls) {
+      manipulationControls.style.display = 'block';
+    }
+
+    if (manipulationActions) {
+      manipulationActions.style.display = mode === 'move' || mode === 'rotate' ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Handle furniture selection
+   */
+  private onFurnitureSelected(detail: { furnitureId: string; mode: string }): void {
+    this.state.selectedFurniture = this.state.furniture.find(f => f.id === detail.furnitureId) || null;
+    
+    if (detail.mode === 'move' && this.state.selectedFurniture) {
+      this.updatePositionInputs();
+    }
+  }
+
+  /**
+   * Handle furniture deselection
+   */
+  private onFurnitureDeselected(_detail: { mode: string }): void {
+    this.state.selectedFurniture = null;
+  }
+
+  /**
+   * Handle furniture drag completion
+   */
+  private onFurnitureDragged(detail: { furnitureId: string; position: { x: number; y: number; z: number } }): void {
+    const furniture = this.state.furniture.find(f => f.id === detail.furnitureId);
+    if (furniture) {
+      furniture.x = detail.position.x;
+      furniture.y = detail.position.y;
+      furniture.z = detail.position.z;
+    }
+  }
+
+  /**
+   * Handle furniture deletion
+   */
+  private onFurnitureDeleted(detail: { furnitureId: string }): void {
+    this.furnitureManager.removeFurniture(detail.furnitureId);
+    this.state.furniture = this.state.furniture.filter(f => f.id !== detail.furnitureId);
+    this.state.selectedFurniture = null;
+    this.updateBudgetDisplay();
+    this.updateRoomManagementButtons();
+    this.updateAllButtonStates();
+  }
+
+  /**
+   * Update position input fields with current furniture position
+   */
+  private updatePositionInputs(): void {
+    if (!this.room3D || !this.state.selectedFurniture) return;
+
+    const position = this.room3D.getFurniturePosition(this.state.selectedFurniture.id);
+    if (position) {
+      const xInput = document.getElementById('position-x') as HTMLInputElement;
+      const yInput = document.getElementById('position-y') as HTMLInputElement;
+      const zInput = document.getElementById('position-z') as HTMLInputElement;
+
+      if (xInput) xInput.value = position.x.toFixed(1);
+      if (yInput) yInput.value = position.y.toFixed(1);
+      if (zInput) zInput.value = position.z.toFixed(1);
+    }
+  }
+
+  /**
+   * Apply new position to selected furniture
+   */
+  private applyPosition(): void {
+    if (!this.room3D || !this.state.selectedFurniture) return;
+
+    const xInput = document.getElementById('position-x') as HTMLInputElement;
+    const yInput = document.getElementById('position-y') as HTMLInputElement;
+    const zInput = document.getElementById('position-z') as HTMLInputElement;
+
+    const newPosition = {
+      x: parseFloat(xInput.value) || 0,
+      y: parseFloat(yInput.value) || 0,
+      z: parseFloat(zInput.value) || 0
+    };
+
+    const success = this.room3D.moveFurniture(this.state.selectedFurniture.id, newPosition);
+    
+    if (success) {
+      // Update furniture position in state
+      const furniture = this.state.furniture.find(f => f.id === this.state.selectedFurniture!.id);
+      if (furniture) {
+        furniture.x = newPosition.x;
+        furniture.y = newPosition.y;
+        furniture.z = newPosition.z;
+      }
+    } else {
+      alert('Cannot move furniture to that position - it would be outside room boundaries!');
+    }
+  }
+
+  /**
+   * Rotate selected furniture
+   */
+  private rotateSelectedFurniture(direction: 'clockwise' | 'counterclockwise'): void {
+    if (!this.room3D || !this.state.selectedFurniture) return;
+
+    const success = this.room3D.rotateFurniture(this.state.selectedFurniture.id, direction);
+    
+    if (success) {
+      // Update furniture rotation in state
+      const furniture = this.state.furniture.find(f => f.id === this.state.selectedFurniture!.id);
+      if (furniture) {
+        furniture.rotation = this.room3D.getFurnitureRotation(this.state.selectedFurniture.id);
+      }
+    }
+  }
+
+  /**
+   * Update furniture rotation in state (called from Room3D)
+   */
+  updateFurnitureRotation(furnitureId: string, rotation: number): void {
+    const furniture = this.state.furniture.find(f => f.id === furnitureId);
+    if (furniture) {
+      furniture.rotation = rotation;
     }
   }
 
