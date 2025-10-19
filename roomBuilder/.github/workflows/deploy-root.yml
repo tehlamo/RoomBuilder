@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages (root)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: roomBuilder/package-lock.json
+        
+    - name: Install dependencies
+      run: |
+        cd roomBuilder
+        npm ci
+        
+    - name: Build for root deployment
+      run: |
+        cd roomBuilder
+        # Set base to root for GitHub Pages
+        echo 'export default defineConfig({
+          base: "/",
+          build: {
+            outDir: "../dist",
+            assetsDir: "assets",
+            sourcemap: false,
+            rollupOptions: {
+              output: {
+                manualChunks: {
+                  "three": ["three"],
+                  "firebase": ["firebase"],
+                  "google-genai": ["@google/genai"]
+                }
+              }
+            }
+          }
+        })' > vite.config.temp.ts
+        mv vite.config.temp.ts vite.config.ts
+        npm run build
+        
+    - name: Deploy to root
+      run: |
+        # Copy built files to repository root
+        cp -r dist/* .
+        
+        # Ensure index.html is in root
+        if [ -f dist/index.html ]; then
+          cp dist/index.html .
+        fi
+        
+    - name: Commit and push
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Deploy to GitHub Pages (root)" || exit 0
+        git push

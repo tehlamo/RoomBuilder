@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  base: '/RoomBuilder/', // Replace 'RoomBuilder' with your actual repository name
+  base: process.env.NODE_ENV === 'production' ? '/RoomBuilder/' : '/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

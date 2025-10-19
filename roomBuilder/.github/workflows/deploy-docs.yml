@@ -1,0 +1,52 @@
+name: Deploy to GitHub Pages (docs folder)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: roomBuilder/package-lock.json
+        
+    - name: Install dependencies
+      run: |
+        cd roomBuilder
+        npm ci
+        
+    - name: Build for docs deployment
+      run: |
+        cd roomBuilder
+        NODE_ENV=production npm run build
+        
+    - name: Deploy to docs folder
+      run: |
+        # Create docs directory if it doesn't exist
+        mkdir -p docs
+        
+        # Copy dist contents to docs folder
+        cp -r roomBuilder/dist/* docs/
+        
+        # Create index.html in root if it doesn't exist
+        if [ ! -f index.html ]; then
+          cp roomBuilder/dist/index.html .
+        fi
+        
+    - name: Commit and push
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git commit -m "Deploy to GitHub Pages" || exit 0
+        git push
