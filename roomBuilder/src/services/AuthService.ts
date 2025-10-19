@@ -26,7 +26,6 @@ export class AuthService {
     
     // Listen for authentication state changes
     onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user);
       if (user) {
         this.currentUser = {
           uid: user.uid,
@@ -34,10 +33,8 @@ export class AuthService {
           email: user.email,
           photoURL: user.photoURL
         };
-        console.log('Set current user:', this.currentUser);
       } else {
         this.currentUser = null;
-        console.log('Cleared current user');
       }
       
       // Notify all listeners
@@ -48,7 +45,6 @@ export class AuthService {
   // Sign in with Google
   async signInWithGoogle(): Promise<AuthUser | null> {
     if (this.isSigningIn) {
-      console.log('Already signing in, please wait...');
       return null;
     }
     
@@ -66,7 +62,6 @@ export class AuthService {
       });
     } catch (error) {
       this.isSigningIn = false;
-      console.error('Error signing in with Google:', error);
       throw error;
     }
   }
@@ -74,17 +69,23 @@ export class AuthService {
   // Sign out
   async signOut(): Promise<void> {
     try {
+      // Clear the current user immediately
+      this.currentUser = null;
+      
+      // Sign out from Firebase
       await signOut(auth);
-      console.log('User signed out');
+      
+      // Notify all listeners that user is signed out
+      this.authStateListeners.forEach(listener => listener(null));
     } catch (error) {
-      console.error('Error signing out:', error);
-      throw error;
+      // Even if Firebase signOut fails, we still clear our local state
+      this.currentUser = null;
+      this.authStateListeners.forEach(listener => listener(null));
     }
   }
 
   // Get current user
   getCurrentUser(): AuthUser | null {
-    console.log('getCurrentUser() called, returning:', this.currentUser);
     return this.currentUser;
   }
 

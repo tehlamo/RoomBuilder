@@ -5,6 +5,7 @@ export interface AppState {
   isEditing: boolean;
   budget: number;
   roomType: string;
+  isPublished: boolean;
 }
 
 export interface DecorationSuggestion {

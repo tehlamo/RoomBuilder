@@ -4,18 +4,22 @@ export class UserProfile {
   private container: HTMLElement;
   private authService: AuthService;
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, authService: AuthService) {
     this.container = container;
-    this.authService = new AuthService();
+    this.authService = authService;
   }
 
   render(): void {
     const user = this.authService.getCurrentUser();
+    const isAuthenticated = this.authService.isAuthenticated();
     console.log('UserProfile.render() - Current user:', user);
+    console.log('UserProfile.render() - Is authenticated:', isAuthenticated);
     
-    if (user) {
+    if (user && isAuthenticated) {
+      console.log('UserProfile: Rendering logged-in profile');
       this.renderLoggedInProfile(user);
     } else {
+      console.log('UserProfile: Rendering logged-out profile');
       this.renderLoggedOutProfile();
     }
   }
@@ -39,6 +43,12 @@ export class UserProfile {
 
     this.container.innerHTML = `
       <div class="user-profile logged-in">
+        <div class="login-status">
+          <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span class="status-text">Logged In</span>
+          </div>
+        </div>
         <div class="user-info">
           ${avatarHTML}
           ${fallbackAvatarHTML}

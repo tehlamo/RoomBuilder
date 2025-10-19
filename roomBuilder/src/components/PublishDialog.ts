@@ -26,6 +26,7 @@ export class PublishDialog {
     },
     onPublish?: (designId: string) => void
   ): void {
+    // User should already be authenticated to reach this point
     this.onPublishCallback = onPublish;
     this.renderDialog(designData);
   }

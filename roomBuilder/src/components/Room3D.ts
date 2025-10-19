@@ -90,10 +90,15 @@ export class Room3D {
       this.scene.add(ceiling);
 
       const maxDimension = Math.max(dimensions.width, dimensions.length, dimensions.height);
-      // Limit camera distance to prevent extreme zoom out
-      const cameraDistance = Math.min(maxDimension * 1.5, 50);
-      this.camera.position.set(cameraDistance, maxDimension * 0.8, cameraDistance);
+      // Set reasonable camera distance to prevent extreme zoom out
+      const cameraDistance = Math.min(maxDimension * 1.2, 30);
+      this.camera.position.set(cameraDistance, maxDimension * 0.6, cameraDistance);
       this.camera.lookAt(0, 0, 0);
+      
+      // Update controls target and reset zoom
+      this.controls.target.set(0, 0, 0);
+      this.controls.reset();
+      this.controls.update();
       
       // Force a resize to ensure proper dimensions after room creation
       setTimeout(() => {
@@ -180,11 +185,20 @@ export class Room3D {
   }
 
   private getContainerWidth(): number {
-    return this.container.clientWidth || this.container.offsetWidth || 800;
+    const width = this.container.clientWidth || this.container.offsetWidth;
+    if (width > 0) return width;
+    
+    // Fallback to parent container or window width
+    const parentWidth = this.container.parentElement?.clientWidth || window.innerWidth;
+    return Math.max(parentWidth * 0.75, 800); // Ensure minimum width
   }
 
   private getContainerHeight(): number {
-    return this.container.clientHeight || this.container.offsetHeight || window.innerHeight - 70;
+    const height = this.container.clientHeight || this.container.offsetHeight;
+    if (height > 0) return height;
+    
+    // Fallback to window height minus controls
+    return Math.max(window.innerHeight - 70, 400); // Ensure minimum height
   }
 
   private onWindowResize(): void {

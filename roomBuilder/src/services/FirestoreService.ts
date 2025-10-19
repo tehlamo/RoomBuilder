@@ -322,7 +322,7 @@ export class FirestoreService {
   }
 
   // Like a design
-  async likeDesign(designId: string): Promise<void> {
+  async likeDesign(designId: string, userId?: string): Promise<void> {
     try {
       const designRef = doc(this.designsCollection, designId);
       await updateDoc(designRef, {

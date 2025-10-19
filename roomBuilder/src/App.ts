@@ -30,7 +30,8 @@ export class RoomBuilderApp {
       selectedFurniture: null,
       isEditing: false,
       budget: 1000,
-      roomType: 'living'
+      roomType: 'living',
+      isPublished: false
     };
 
     this.initializeServices();
@@ -83,6 +84,7 @@ export class RoomBuilderApp {
     this.setupBudgetTracker();
     this.setupEventListeners();
     this.setupAuthStateListener();
+    this.updateAllButtonStates(); // Set initial button states
   }
 
   private setupRoomManagement(): void {
@@ -249,11 +251,25 @@ export class RoomBuilderApp {
   }
 
   private handleCreateRoom(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with room creation
+        this.proceedWithCreateRoom();
+      });
+      return;
+    }
+
+    this.proceedWithCreateRoom();
+  }
+
+  private proceedWithCreateRoom(): void {
+    const currentUser = this.authService.getCurrentUser();
+    console.log(`Welcome back, ${currentUser?.displayName || 'User'}! Creating your room...`);
+    
     const width = parseFloat((document.getElementById('width') as HTMLInputElement).value);
     const length = parseFloat((document.getElementById('length') as HTMLInputElement).value);
     const height = parseFloat((document.getElementById('height') as HTMLInputElement).value);
-
-    console.log('Creating room with dimensions:', { width, length, height });
 
     if (!width || !length || !height) {
       alert('Please enter all dimensions');
@@ -296,6 +312,19 @@ export class RoomBuilderApp {
   }
 
   private addFurnitureToRoom(template: any): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with adding furniture
+        this.proceedWithAddFurniture(template);
+      });
+      return;
+    }
+
+    this.proceedWithAddFurniture(template);
+  }
+
+  private proceedWithAddFurniture(template: any): void {
     if (!this.state.roomDimensions) {
       alert('Please create a room first');
       return;
@@ -335,6 +364,19 @@ export class RoomBuilderApp {
   }
 
   private async getAISuggestions(): Promise<void> {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with AI suggestions
+        this.proceedWithAISuggestions();
+      });
+      return;
+    }
+
+    this.proceedWithAISuggestions();
+  }
+
+  private async proceedWithAISuggestions(): Promise<void> {
     if (!this.state.roomDimensions) {
       alert('Please create a room first');
       return;
@@ -380,6 +422,19 @@ export class RoomBuilderApp {
   }
 
   private toggleEditMode(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with edit mode
+        this.proceedWithToggleEditMode();
+      });
+      return;
+    }
+
+    this.proceedWithToggleEditMode();
+  }
+
+  private proceedWithToggleEditMode(): void {
     this.state.isEditing = !this.state.isEditing;
     const editButton = document.getElementById('edit-mode') as HTMLButtonElement;
     const deleteButton = document.getElementById('delete-selected') as HTMLButtonElement;
@@ -399,6 +454,19 @@ export class RoomBuilderApp {
   }
 
   private deleteSelectedFurniture(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with deleting furniture
+        this.proceedWithDeleteSelectedFurniture();
+      });
+      return;
+    }
+
+    this.proceedWithDeleteSelectedFurniture();
+  }
+
+  private proceedWithDeleteSelectedFurniture(): void {
     if (!this.state.selectedFurniture) {
       alert('Please select a furniture item first');
       return;
@@ -426,6 +494,19 @@ export class RoomBuilderApp {
   }
 
   private resetCameraView(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with resetting camera
+        this.proceedWithResetCameraView();
+      });
+      return;
+    }
+
+    this.proceedWithResetCameraView();
+  }
+
+  private proceedWithResetCameraView(): void {
     if (!this.state.roomDimensions || !this.room3D) {
       alert('Please create a room first');
       return;
@@ -443,15 +524,8 @@ export class RoomBuilderApp {
       return;
     }
 
-    // Check if user is authenticated
-    if (!this.authService.isAuthenticated()) {
-      this.loginModal.show(() => {
-        // After successful login, proceed with publishing
-        this.proceedWithPublishing();
-      });
-      return;
-    }
-
+    // User should already be authenticated to reach this point
+    // since they needed to be authenticated to create room and add furniture
     this.proceedWithPublishing();
   }
 
@@ -482,13 +556,35 @@ export class RoomBuilderApp {
 
     this.publishDialog.show(designData, (designId) => {
       console.log('Design published with ID:', designId);
-      // Optionally switch to gallery view to see the published design
-      this.toggleGallery();
+      
+      // Mark the room as published to disable clear room button
+      this.state.isPublished = true;
+      
+      // Update room management buttons to reflect published state
+      this.updateRoomManagementButtons();
+      
+      // Switch to gallery view to see the published design
+      this.showGallery();
     });
   }
 
   private toggleGallery(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with gallery
+        this.proceedWithToggleGallery();
+      });
+      return;
+    }
+
+    this.proceedWithToggleGallery();
+  }
+
+  private proceedWithToggleGallery(): void {
     if (this.currentView === 'builder') {
+      const currentUser = this.authService.getCurrentUser();
+      console.log(`Welcome back, ${currentUser?.displayName || 'User'}! Loading community designs...`);
       this.showGallery();
     } else {
       this.showBuilder();
@@ -504,7 +600,7 @@ export class RoomBuilderApp {
     
     // Initialize and show the gallery
     const galleryContainer = document.getElementById('gallery-container')!;
-    this.designGallery = new DesignGallery(galleryContainer);
+    this.designGallery = new DesignGallery(galleryContainer, this.authService);
     this.designGallery.initialize();
 
     // Listen for design selection
@@ -577,9 +673,12 @@ export class RoomBuilderApp {
       }
     }
 
-    // Update button text
+    // Update button text and states
     const browseBtn = document.getElementById('browse-designs') as HTMLButtonElement;
     browseBtn.textContent = 'Browse Community';
+    
+    // Update all button states
+    this.updateAllButtonStates();
   }
 
   private loadDesignFromGallery(design: any): void {
@@ -593,6 +692,7 @@ export class RoomBuilderApp {
     this.state.furniture = design.furniture;
     this.state.budget = design.budget;
     this.state.roomType = design.roomType;
+    this.state.isPublished = false; // Reset published state when loading design
 
     console.log('App: Design data loaded:', {
       roomDimensions: this.state.roomDimensions,
@@ -609,18 +709,26 @@ export class RoomBuilderApp {
       try {
         console.log('App: Creating room with dimensions:', this.state.roomDimensions);
         const viewport = document.getElementById('3d-viewport')!;
-        this.room3D = new Room3D(viewport);
-        this.room3D.createRoom(this.state.roomDimensions);
         
-        // Add furniture
-        console.log('App: Adding furniture:', this.state.furniture.length, 'items');
-        this.state.furniture.forEach(furniture => {
-          console.log('App: Adding furniture:', furniture.name);
-          this.room3D.addFurniture(furniture);
-        });
+        // Ensure the viewport has proper dimensions before creating Room3D
+        viewport.style.width = '100%';
+        viewport.style.height = 'calc(100vh - 70px)';
         
-        // Update room management buttons
-        this.updateRoomManagementButtons();
+        // Small delay to ensure DOM has updated
+        setTimeout(() => {
+          this.room3D = new Room3D(viewport);
+          this.room3D.createRoom(this.state.roomDimensions);
+          
+          // Add furniture
+          console.log('App: Adding furniture:', this.state.furniture.length, 'items');
+          this.state.furniture.forEach(furniture => {
+            console.log('App: Adding furniture:', furniture.name);
+            this.room3D.addFurniture(furniture);
+          });
+          
+          // Update room management buttons
+          this.updateRoomManagementButtons();
+        }, 100);
         
       } catch (error) {
         console.error('App: Error loading design into 3D viewport:', error);
@@ -635,7 +743,7 @@ export class RoomBuilderApp {
 
   private setupUserProfile(): void {
     const userProfileContainer = document.getElementById('user-profile')!;
-    this.userProfile = new UserProfile(userProfileContainer);
+    this.userProfile = new UserProfile(userProfileContainer, this.authService);
     this.userProfile.render();
 
     // Listen for login requests
@@ -655,26 +763,82 @@ export class RoomBuilderApp {
         this.userProfile.refresh();
       }
       
-      // Update publish button state based on authentication
-      this.updatePublishButtonState();
+      // Update all button states based on authentication
+      this.updateAllButtonStates();
     });
   }
 
   private updatePublishButtonState(): void {
     const publishBtn = document.getElementById('publish-design') as HTMLButtonElement;
     if (publishBtn) {
-      if (this.authService.isAuthenticated()) {
-        publishBtn.textContent = 'Publish Design';
-        publishBtn.title = 'Publish your design to the community';
-      } else {
-        publishBtn.textContent = 'Sign in to Publish';
-        publishBtn.title = 'Sign in with Google to publish your design';
-      }
+      publishBtn.textContent = 'Publish Design';
+      publishBtn.title = 'Publish your design to the community';
+      publishBtn.disabled = false; // Keep enabled to allow sign-in
+    }
+  }
+
+  private updateAllButtonStates(): void {
+    const isAuthenticated = this.authService.isAuthenticated();
+    
+    // Update publish button
+    this.updatePublishButtonState();
+    
+    // Update create room button
+    const createRoomBtn = document.getElementById('create-room') as HTMLButtonElement;
+    if (createRoomBtn) {
+      createRoomBtn.textContent = 'Create Room';
+      createRoomBtn.title = 'Create a new room';
+      createRoomBtn.disabled = false; // Keep enabled to allow sign-in
+    }
+    
+    // Update AI suggestions button
+    const aiBtn = document.getElementById('get-suggestions') as HTMLButtonElement;
+    if (aiBtn) {
+      aiBtn.textContent = 'Get AI Suggestions';
+      aiBtn.title = 'Get AI-powered decoration suggestions';
+      aiBtn.disabled = false; // Keep enabled to allow sign-in
+    }
+    
+    // Update browse designs button
+    const browseBtn = document.getElementById('browse-designs') as HTMLButtonElement;
+    if (browseBtn) {
+      browseBtn.textContent = 'Browse Community';
+      browseBtn.title = 'Browse community designs';
+      browseBtn.disabled = false; // Keep enabled to allow sign-in
+    }
+    
+    // Update room management buttons
+    const clearBtn = document.getElementById('clear-room-btn') as HTMLButtonElement;
+    const deleteBtn = document.getElementById('delete-room-btn') as HTMLButtonElement;
+    
+    if (clearBtn) {
+      clearBtn.textContent = 'Clear Room';
+      clearBtn.title = 'Remove all furniture from the room';
+      clearBtn.disabled = !isAuthenticated || !this.state.roomDimensions || this.state.furniture.length === 0;
+    }
+    
+    if (deleteBtn) {
+      deleteBtn.textContent = 'Delete Room';
+      deleteBtn.title = 'Delete the current room and start over';
+      deleteBtn.disabled = !isAuthenticated;
     }
   }
 
 
   private deleteCurrentRoom(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with deleting room
+        this.proceedWithDeleteRoom();
+      });
+      return;
+    }
+
+    this.proceedWithDeleteRoom();
+  }
+
+  private proceedWithDeleteRoom(): void {
     if (!this.state.roomDimensions) {
       // If no room exists, just reset to initial state
       console.log('No room to delete, resetting to initial state...');
@@ -697,7 +861,8 @@ export class RoomBuilderApp {
       selectedFurniture: null,
       isEditing: false,
       budget: 1000,
-      roomType: 'living'
+      roomType: 'living',
+      isPublished: false
     };
 
     // Safely clear the 3D viewport without breaking it
@@ -720,6 +885,19 @@ export class RoomBuilderApp {
   }
 
   private clearCurrentRoom(): void {
+    // Check if user is authenticated
+    if (!this.authService.isAuthenticated()) {
+      this.loginModal.show(() => {
+        // After successful login, proceed with clearing room
+        this.proceedWithClearRoom();
+      });
+      return;
+    }
+
+    this.proceedWithClearRoom();
+  }
+
+  private proceedWithClearRoom(): void {
     if (!this.state.roomDimensions) {
       alert('No room to clear');
       return;
@@ -761,10 +939,27 @@ export class RoomBuilderApp {
       deleteBtn.disabled = false;
     }
     
-    // Clear Room button is only enabled when there's a room AND furniture
+    // Clear Room button is disabled if room is published or if no room/furniture
     if (clearBtn) {
-      clearBtn.disabled = !this.state.roomDimensions || this.state.furniture.length === 0;
+      const isDisabled = this.state.isPublished || 
+                        !this.state.roomDimensions || 
+                        this.state.furniture.length === 0;
+      clearBtn.disabled = isDisabled;
+      
+      // Update button text and title based on published state
+      if (this.state.isPublished) {
+        clearBtn.textContent = 'Room Published';
+        clearBtn.title = 'Cannot clear room after publishing';
+        clearBtn.classList.add('published-disabled');
+      } else {
+        clearBtn.textContent = 'Clear Room';
+        clearBtn.title = 'Remove all furniture from the room';
+        clearBtn.classList.remove('published-disabled');
+      }
     }
+    
+    // Also update all button states to ensure authentication status is reflected
+    this.updateAllButtonStates();
   }
 
   private safelyClearViewport(): void {
