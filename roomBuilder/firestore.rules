@@ -17,6 +17,16 @@ service cloud.firestore {
       // Allow authenticated users to update their own designs
       allow update: if request.auth != null && request.auth.uid == resource.data.author.uid;
       
+      // Allow anyone to like public designs (increment likes count)
+      allow update: if resource.data.isPublic == true 
+        && request.resource.data.likes == resource.data.likes + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'updatedAt']);
+      
+      // Allow anyone to view public designs (increment views count)
+      allow update: if resource.data.isPublic == true 
+        && request.resource.data.views == resource.data.views + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views', 'updatedAt']);
+      
       // Allow authenticated users to delete their own designs
       allow delete: if request.auth != null && request.auth.uid == resource.data.author.uid;
     }
@@ -37,6 +47,11 @@ service cloud.firestore {
       
       // Allow authenticated users to update their own comments
       allow update: if request.auth != null && request.auth.uid == resource.data.author.uid;
+      
+      // Allow anyone to like comments on public designs
+      allow update: if get(/databases/$(database)/documents/designs/$(resource.data.designId)).data.isPublic == true
+        && request.resource.data.likes == resource.data.likes + 1
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'updatedAt']);
       
       // Allow authenticated users to delete their own comments
       allow delete: if request.auth != null && request.auth.uid == resource.data.author.uid;
