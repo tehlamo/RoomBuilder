@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Cube Logo Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .demo-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+        }
+        
+        .logo-showcase {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            align-items: center;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        
+        .logo-item {
+            text-align: center;
+        }
+        
+        .logo-container {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 15px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .logo-container svg {
+            width: 80px;
+            height: 80px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        p {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+        
+        .logo-label {
+            font-weight: 600;
+            color: #34495e;
+            margin-bottom: 5px;
+        }
+        
+        .logo-size {
+            font-size: 0.9rem;
+            color: #95a5a6;
+        }
+        
+        .features {
+            margin-top: 30px;
+            text-align: left;
+        }
+        
+        .features h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .features li {
+            padding: 8px 0;
+            color: #34495e;
+            position: relative;
+            padding-left: 25px;
+        }
+        
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="demo-container">
+        <h1>🎯 Room Builder Logo</h1>
+        <p>3D Cube with Blue Face - Perfect for Web App Branding</p>
+        
+        <div class="logo-showcase">
+            <div class="logo-item">
+                <div class="logo-container">
+                    <svg width="80" height="80" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="blueGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- 3D Cube with perspective -->
+                        <!-- Front face (blue) -->
+                        <polygon points="10,8 22,8 22,20 10,20" fill="url(#blueGradient)"/>
+                        
+                        <!-- Top face (light gray) -->
+                        <polygon points="10,8 16,4 28,4 22,8" fill="#ecf0f1"/>
+                        
+                        <!-- Right face (darker gray) -->
+                        <polygon points="22,8 28,4 28,16 22,20" fill="#34495e" opacity="0.7"/>
+                        
+                        <!-- Add depth lines -->
+                        <line x1="10" y1="8" x2="16" y2="4" stroke="#bdc3c7" stroke-width="0.5"/>
+                        <line x1="22" y1="8" x2="28" y2="4" stroke="#bdc3c7" stroke-width="0.5"/>
+                        <line x1="22" y1="20" x2="28" y2="16" stroke="#95a5a6" stroke-width="0.5"/>
+                    </svg>
+                </div>
+                <div class="logo-label">Favicon (32x32)</div>
+                <div class="logo-size">Small & Crisp</div>
+            </div>
+            
+            <div class="logo-item">
+                <div class="logo-container">
+                    <svg width="80" height="80" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="blueGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#3498db;stop-opacity:1" />
+                                <stop offset="100%" style="stop-color:#2980b9;stop-opacity:1" />
+                            </linearGradient>
+                            <linearGradient id="shadowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#34495e;stop-opacity:0.3" />
+                                <stop offset="100%" style="stop-color:#2c3e50;stop-opacity:0.6" />
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- 3D Cube with perspective -->
+                        <!-- Front face (blue) -->
+                        <polygon points="20,15 44,15 44,39 20,39" fill="url(#blueGradient2)" stroke="#2980b9" stroke-width="1"/>
+                        
+                        <!-- Top face (light gray) -->
+                        <polygon points="20,15 32,7 56,7 44,15" fill="#ecf0f1" stroke="#bdc3c7" stroke-width="1"/>
+                        
+                        <!-- Right face (darker gray) -->
+                        <polygon points="44,15 56,7 56,31 44,39" fill="url(#shadowGradient)" stroke="#95a5a6" stroke-width="1"/>
+                        
+                        <!-- Add some depth lines for 3D effect -->
+                        <line x1="20" y1="15" x2="32" y2="7" stroke="#bdc3c7" stroke-width="1"/>
+                        <line x1="44" y1="15" x2="56" y2="7" stroke="#bdc3c7" stroke-width="1"/>
+                        <line x1="44" y1="39" x2="56" y2="31" stroke="#95a5a6" stroke-width="1"/>
+                        
+                        <!-- Add a subtle highlight to the blue face -->
+                        <polygon points="22,17 26,17 26,21 22,21" fill="#5dade2" opacity="0.6"/>
+                    </svg>
+                </div>
+                <div class="logo-label">App Logo (64x64)</div>
+                <div class="logo-size">High Quality</div>
+            </div>
+        </div>
+        
+        <div class="features">
+            <h3>✨ Logo Features</h3>
+            <ul>
+                <li>3D perspective with realistic depth</li>
+                <li>Blue face for brand recognition</li>
+                <li>Clean, modern design</li>
+                <li>Scalable SVG format</li>
+                <li>Perfect for web apps and favicons</li>
+                <li>Professional gradient effects</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
