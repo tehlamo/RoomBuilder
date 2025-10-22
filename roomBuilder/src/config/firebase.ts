@@ -5,13 +5,13 @@ import { getAnalytics } from 'firebase/analytics';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCvu8YJ6yQh5bXeDaoyGgo3LYiFgw8x-tA",
-  authDomain: "roombuilder-4ffd9.firebaseapp.com",
-  projectId: "roombuilder-4ffd9",
-  storageBucket: "roombuilder-4ffd9.firebasestorage.app",
-  messagingSenderId: "319855638873",
-  appId: "1:319855638873:web:495b5457b1750911d6f448",
-  measurementId: "G-Q0DWR8K1ZC"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCvu8YJ6yQh5bXeDaoyGgo3LYiFgw8x-tA",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "roombuilder-4ffd9.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "roombuilder-4ffd9",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "roombuilder-4ffd9.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "319855638873",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:319855638873:web:495b5457b1750911d6f448",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-Q0DWR8K1ZC"
 };
 
 // Initialize Firebase
